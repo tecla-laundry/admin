@@ -16,7 +16,7 @@ import {
 } from '@radix-ui/react-icons'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/contexts/auth-context'
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: DashboardIcon },
@@ -32,11 +32,10 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname()
-  const supabase = createClient()
+  const { signOut } = useAuth()
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    window.location.href = '/sign-in'
+    await signOut()
   }
 
   return (

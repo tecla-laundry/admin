@@ -1,23 +1,106 @@
+'use client'
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { LaundryTable } from '@/components/admin/laundry-table'
+import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/contexts/auth-context'
+
+interface Laundry {
+  id: string
+  business_name: string
+  owner_name: string
+  email: string
+  phone: string
+  physical_address: string
+  latitude: number
+  longitude: number
+  status: string
+  services_offered: string[]
+  price_per_kg: number
+  capacity_per_day: number
+  operating_hours: Record<string, { open: string; close: string }>
+  photos: string[] | null
+  rating: number
+  total_reviews: number
+  is_verified: boolean
+  created_at: string
+  rejection_reason?: string
+}
+
+async function fetchLaundries(status: string, supabase: ReturnType<typeof import('@/lib/supabase/client').createClient>): Promise<Laundry[]> {
+  const { data, error } = await supabase
+    .from('laundries')
+    .select('*')
+    .eq('status', status)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data || []
+}
 
 export default function LaundriesPage() {
+  const [activeTab, setActiveTab] = useState('pending_approval')
+  const [refreshKey, setRefreshKey] = useState(0)
+  const { supabase } = useAuth()
+
+  const statusMap: Record<string, string> = {
+    pending: 'pending_approval',
+    active: 'active',
+    rejected: 'rejected',
+    'more-info': 'more_info_needed',
+  }
+
+  const { data: pendingData, isLoading: pendingLoading } = useQuery({
+    queryKey: ['laundries', 'pending_approval', refreshKey],
+    queryFn: () => fetchLaundries('pending_approval', supabase),
+  })
+
+  const { data: activeData, isLoading: activeLoading } = useQuery({
+    queryKey: ['laundries', 'active', refreshKey],
+    queryFn: () => fetchLaundries('active', supabase),
+  })
+
+  const { data: rejectedData, isLoading: rejectedLoading } = useQuery({
+    queryKey: ['laundries', 'rejected', refreshKey],
+    queryFn: () => fetchLaundries('rejected', supabase),
+  })
+
+  const { data: moreInfoData, isLoading: moreInfoLoading } = useQuery({
+    queryKey: ['laundries', 'more_info_needed', refreshKey],
+    queryFn: () => fetchLaundries('more_info_needed', supabase),
+  })
+
+  const handleRefresh = () => {
+    setRefreshKey((prev) => prev + 1)
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Laundry Partners</h1>
-        <p className="text-muted-foreground">
-          Manage laundry partner applications and approvals
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Laundry Partners</h1>
+          <p className="text-muted-foreground">
+            Manage laundry partner applications and approvals
+          </p>
+        </div>
+        <Button onClick={handleRefresh} variant="outline">
+          Refresh
+        </Button>
       </div>
 
-      <Tabs defaultValue="pending" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="pending">Pending Approval</TabsTrigger>
-          <TabsTrigger value="active">Active</TabsTrigger>
-          <TabsTrigger value="rejected">Rejected</TabsTrigger>
-          <TabsTrigger value="more-info">More Info Needed</TabsTrigger>
+          <TabsTrigger value="pending">
+            Pending Approval ({pendingData?.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="active">Active ({activeData?.length || 0})</TabsTrigger>
+          <TabsTrigger value="rejected">Rejected ({rejectedData?.length || 0})</TabsTrigger>
+          <TabsTrigger value="more-info">
+            More Info Needed ({moreInfoData?.length || 0})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="pending" className="space-y-4">
@@ -25,18 +108,15 @@ export default function LaundriesPage() {
             <CardHeader>
               <CardTitle>Pending Approvals</CardTitle>
               <CardDescription>
-                Laundry applications awaiting review
+                Laundry applications awaiting review. Click "View Details" to approve or reject.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Data table with TanStack Table will be implemented here.
-                Features: filters (location, capacity, rating, services), bulk approve/reject,
-                detail view modal with photos, Google Maps pin, operating hours, bank details.
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Actions will call Edge Functions: approve_laundry_partner, reject_laundry_partner
-              </p>
+              {pendingLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading...</div>
+              ) : (
+                <LaundryTable data={pendingData || []} onRefresh={handleRefresh} />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -48,9 +128,11 @@ export default function LaundriesPage() {
               <CardDescription>Currently active laundry partners</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Active laundries table with performance metrics
-              </p>
+              {activeLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading...</div>
+              ) : (
+                <LaundryTable data={activeData || []} onRefresh={handleRefresh} />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -62,9 +144,11 @@ export default function LaundriesPage() {
               <CardDescription>Laundry applications that were rejected</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Rejected applications with reasons
-              </p>
+              {rejectedLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading...</div>
+              ) : (
+                <LaundryTable data={rejectedData || []} onRefresh={handleRefresh} />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -73,12 +157,16 @@ export default function LaundriesPage() {
           <Card>
             <CardHeader>
               <CardTitle>More Info Needed</CardTitle>
-              <CardDescription>Applications requiring additional information</CardDescription>
+              <CardDescription>
+                Applications requiring additional information
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Applications flagged for more information via request_more_info_laundry Edge Function
-              </p>
+              {moreInfoLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading...</div>
+              ) : (
+                <LaundryTable data={moreInfoData || []} onRefresh={handleRefresh} />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
