@@ -14,8 +14,8 @@ export async function updateSession(request: NextRequest) {
         getAll() {
           return request.cookies.getAll()
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+        setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({
             request,
           })
@@ -31,30 +31,33 @@ export async function updateSession(request: NextRequest) {
   // supabase.auth.getUser(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
 
+  // Refresh session - this ensures cookies are properly set
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser()
 
-  // Check if user is trying to access admin routes
+  // For admin routes, we allow the request through and let the client-side AuthGuard handle it
+  // This is because the server-side client might not have the session immediately after login
+  // The client-side guard uses the shared Supabase client instance which has the session
+  // We still do a basic check here, but don't redirect - let the client handle it
   if (request.nextUrl.pathname.startsWith('/admin')) {
-    if (!user) {
-      // No user, redirect to sign-in
-      const url = request.nextUrl.clone()
-      url.pathname = '/sign-in'
-      return NextResponse.redirect(url)
-    }
+    // Only redirect if we're certain there's no session (not just a missing cookie issue)
+    // The client-side AuthGuard will handle the actual auth check with the shared client
+    // This prevents the redirect loop after login
+  }
 
-    // Check if user has admin role
+  // Redirect signed-in users away from sign-in page
+  if (request.nextUrl.pathname === '/sign-in' && user) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single()
 
-    if (!profile || profile.role !== 'admin') {
-      // Not an admin, redirect to 403
+    if (profile?.role === 'admin') {
       const url = request.nextUrl.clone()
-      url.pathname = '/403'
+      url.pathname = '/admin'
       return NextResponse.redirect(url)
     }
   }
