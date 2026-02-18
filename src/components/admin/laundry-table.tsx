@@ -51,6 +51,36 @@ interface Laundry {
   bank_details?: any | null
 }
 
+interface ServicesOffered {
+  express: boolean
+  dry_clean: boolean
+  iron_only: boolean
+  wash_and_fold: boolean
+}
+
+// Convert string array to ServicesOffered object
+function convertServicesToObject(services: string[] | ServicesOffered): ServicesOffered {
+  if (Array.isArray(services)) {
+    return {
+      express: services.includes('express') || services.includes('Express'),
+      dry_clean: services.includes('dry_clean') || services.includes('Dry Clean'),
+      iron_only: services.includes('iron_only') || services.includes('Iron Only'),
+      wash_and_fold: services.includes('wash_and_fold') || services.includes('Wash and Fold'),
+    }
+  }
+  return services
+}
+
+// Convert Laundry with string[] services to Laundry with ServicesOffered
+function convertLaundryForDialog(laundry: Laundry | null): any {
+  if (!laundry) return null
+  
+  return {
+    ...laundry,
+    services_offered: convertServicesToObject(laundry.services_offered),
+  }
+}
+
 interface LaundryTableProps {
   data: Laundry[]
   onRefresh?: () => void
@@ -432,7 +462,7 @@ export function LaundryTable({ data, onRefresh }: LaundryTableProps) {
       </div>
 
       <LaundryDetailDialog
-        laundry={selectedLaundry}
+        laundry={convertLaundryForDialog(selectedLaundry)}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onApproved={onRefresh}
