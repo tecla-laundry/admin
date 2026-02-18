@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { AnalyticsDashboard } from '@/components/admin/analytics-dashboard'
 
 export default function AnalyticsPage() {
   return (
@@ -10,55 +11,15 @@ export default function AnalyticsPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Geographic Heat Map</CardTitle>
-            <CardDescription>
-              Orders by location (Randburg, Bryanston, Sandton focus)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-              Map visualization placeholder (Leaflet or Google Maps)
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Cohort Analysis</CardTitle>
-            <CardDescription>User retention and cohort metrics</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-              Cohort chart placeholder (Recharts)
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       <Card>
         <CardHeader>
-          <CardTitle>Peak Hours Analysis</CardTitle>
-          <CardDescription>Order volume by time of day</CardDescription>
+          <CardTitle>Analytics Overview</CardTitle>
+          <CardDescription>
+            Geographic heat map, cohorts & retention, peak hours, and exportable reports
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-            Peak hours chart placeholder (Recharts)
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Export Reports</CardTitle>
-          <CardDescription>Generate PDF/CSV reports</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Export functionality for PDF and CSV reports
-          </p>
+          <AnalyticsDashboard />
         </CardContent>
       </Card>
     </div>
