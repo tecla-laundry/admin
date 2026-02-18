@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { FinanceDashboard } from '@/components/admin/finance-dashboard'
 
 export default function FinancePage() {
   return (
@@ -11,55 +11,15 @@ export default function FinancePage() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Commission Management</CardTitle>
-            <CardDescription>
-              Global rate (default 15%) + per-laundry overrides
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              Commission settings and overrides will be configured here
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Payout Overview</CardTitle>
-            <CardDescription>
-              Pending laundry payouts, driver payouts, escrow balance
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Payout summary and balances
-              </p>
-              <Button className="w-full">
-                Process Weekly Payouts
-              </Button>
-              <p className="text-xs text-muted-foreground">
-                Calls process_payouts Edge Function
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       <Card>
         <CardHeader>
-          <CardTitle>Earnings Reports</CardTitle>
+          <CardTitle>Finance Operations</CardTitle>
           <CardDescription>
-            Detailed earnings breakdown (laundry vs driver vs platform)
+            Commission settings, payouts, earnings reports, and payment webhook status
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Earnings reports and payment table with webhook status will be displayed here
-          </p>
+          <FinanceDashboard />
         </CardContent>
       </Card>
     </div>

@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { DisputesTable } from '@/components/admin/disputes-table'
 
 export default function DisputesPage() {
   return (
@@ -18,12 +19,7 @@ export default function DisputesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Data table will be implemented here.
-            Features: evidence viewer (photos, notes, signatures),
-            resolve/refund/escalate actions (with reason),
-            notification to all parties via Edge Function.
-          </p>
+          <DisputesTable />
         </CardContent>
       </Card>
     </div>
