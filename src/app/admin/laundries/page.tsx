@@ -28,6 +28,7 @@ interface Laundry {
   is_verified: boolean
   created_at: string
   rejection_reason?: string
+  bank_details?: any | null
 }
 
 async function fetchLaundries(status: string, supabase: ReturnType<typeof import('@/lib/supabase/client').createClient>): Promise<Laundry[]> {
