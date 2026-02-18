@@ -109,7 +109,7 @@ export default function LaundriesPage() {
             <CardHeader>
               <CardTitle>Pending Approvals</CardTitle>
               <CardDescription>
-                Laundry applications awaiting review. Click "View Details" to approve or reject.
+                Laundry applications awaiting review. Click &apos;View Details&apos; to approve or reject.
               </CardDescription>
             </CardHeader>
             <CardContent>

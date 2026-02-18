@@ -13,7 +13,7 @@ export default function ForbiddenPage() {
             <CardTitle>Access Denied</CardTitle>
           </div>
           <CardDescription>
-            You don't have permission to access this page
+            You don&apos;t have permission to access this page
           </CardDescription>
         </CardHeader>
         <CardContent>
