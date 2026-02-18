@@ -19,9 +19,48 @@ Production-grade Admin Dashboard for the Laundry Marketplace Platform.
 
 - Node.js 18+ 
 - npm or yarn
+- Supabase CLI (for local development)
 - Supabase project with configured database
 
-### Installation
+### Quick Start (Local Development)
+
+**📖 For detailed local development setup, see [docs/LOCAL_DEVELOPMENT.md](./docs/LOCAL_DEVELOPMENT.md)**
+
+1. **Start local Supabase** (in the `supabase` directory):
+   ```bash
+   cd ../supabase
+   supabase start
+   ```
+
+2. **Get local credentials**:
+   ```bash
+   ./scripts/get-local-credentials.sh
+   ```
+
+3. **Seed auth users and test data**:
+   ```bash
+   node scripts/seed-auth-users.js
+   supabase db reset  # This applies all migrations including seed data
+   ```
+
+4. **Configure admin app** (in the `admin` directory):
+   ```bash
+   cd ../admin
+   # Create .env.local with local Supabase credentials
+   echo "NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321" > .env.local
+   echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(cat ../supabase/.temp/anon-key)" >> .env.local
+   ```
+
+5. **Install dependencies and run**:
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+6. **Sign in** with test credentials:
+   - Admin: `admin@test.com` / `admin123456`
+
+### Installation (Remote/Production)
 
 1. Install dependencies:
 ```bash
