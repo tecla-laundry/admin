@@ -273,7 +273,7 @@ export function OrderDetailDrawer({
       const { data, error } = await invoke('dispatch_driver', {
         body: {
           order_id: order.id,
-          delivery_type: order.status.includes('pickup') ? 'pickup' : 'delivery',
+          task_type: order.status.includes('pickup') ? 'pickup' : 'delivery',
         },
       })
 

@@ -224,6 +224,14 @@ export function DisputesTable() {
   const [actionType, setActionType] = useState<'resolve' | 'refund' | 'escalate'>('resolve')
   const [actionReason, setActionReason] = useState('')
   const [refundAmount, setRefundAmount] = useState<string>('')
+  const [refundPercentage, setRefundPercentage] = useState<string>('')
+  const [paymentInfo, setPaymentInfo] = useState<{
+    amount: number
+    refund_amount: number
+    status: string
+    escrow_status: string
+  } | null>(null)
+  const [loadingPayment, setLoadingPayment] = useState(false)
   const [savingAction, setSavingAction] = useState(false)
 
   const { data: disputedOrders, isLoading: loadingOrders, refetch: refetchOrders } = useQuery({
@@ -361,11 +369,40 @@ export function DisputesTable() {
             </Button>
             <Button
               size="sm"
-              onClick={() => {
+              onClick={async () => {
                 setActionTarget(row.original)
                 setActionType(row.original.kind === 'order' ? 'resolve' : 'resolve')
                 setActionReason('')
                 setRefundAmount('')
+                setRefundPercentage('')
+                setPaymentInfo(null)
+
+                // Fetch payment info for order disputes
+                if (row.original.kind === 'order') {
+                  setLoadingPayment(true)
+                  try {
+                    const { data: payment, error } = await supabase
+                      .from('payments')
+                      .select('amount, refund_amount, status, escrow_status')
+                      .eq('order_id', row.original.orderId)
+                      .single()
+
+                    if (!error && payment) {
+                      setPaymentInfo({
+                        amount: Number(payment.amount || 0),
+                        refund_amount: Number(payment.refund_amount || 0),
+                        status: payment.status || '',
+                        escrow_status: payment.escrow_status || '',
+                      })
+                    } else {
+                      console.warn('[DisputesTable] Could not fetch payment info', error)
+                    }
+                  } catch (e: any) {
+                    console.error('[DisputesTable] Error fetching payment', e)
+                  } finally {
+                    setLoadingPayment(false)
+                  }
+                }
               }}
             >
               Take Action
@@ -393,8 +430,19 @@ export function DisputesTable() {
   }
 
   const runAction = async () => {
-    if (!actionTarget) return
+    console.log('[DisputesTable] runAction: Starting', {
+      actionTarget: actionTarget ? { kind: actionTarget.kind, orderId: actionTarget.orderId } : null,
+      actionType,
+      hasReason: !!actionReason.trim(),
+      refundAmount,
+    })
+
+    if (!actionTarget) {
+      console.warn('[DisputesTable] runAction: No actionTarget, aborting')
+      return
+    }
     if (!actionReason.trim()) {
+      console.warn('[DisputesTable] runAction: No reason provided, showing error')
       toast.error('Please provide a reason/notes')
       return
     }
@@ -402,17 +450,53 @@ export function DisputesTable() {
     setSavingAction(true)
     try {
       const refund = refundAmount ? Number(refundAmount) : 0
+      console.log('[DisputesTable] runAction: Parsed refund amount', { refundAmount, refund })
+
       if (refundAmount && Number.isNaN(refund)) {
+        console.error('[DisputesTable] runAction: Invalid refund amount', { refundAmount })
         toast.error('Refund amount must be a number')
         return
       }
 
+      // Validate refund amount against payment
+      if (actionType === 'refund' && actionTarget.kind === 'order' && paymentInfo) {
+        const maxRefund = paymentInfo.amount - paymentInfo.refund_amount
+        if (refund > maxRefund) {
+          console.error('[DisputesTable] runAction: Refund exceeds available amount', {
+            refund,
+            maxRefund,
+            paymentAmount: paymentInfo.amount,
+            alreadyRefunded: paymentInfo.refund_amount,
+          })
+          toast.error(`Refund amount cannot exceed R${maxRefund.toFixed(2)} (available for refund)`)
+          return
+        }
+        if (refund <= 0) {
+          console.error('[DisputesTable] runAction: Refund amount must be greater than 0', { refund })
+          toast.error('Refund amount must be greater than 0')
+          return
+        }
+        console.log('[DisputesTable] runAction: Refund amount validated', {
+          refund,
+          maxRefund,
+          percentage: ((refund / maxRefund) * 100).toFixed(1) + '%',
+        })
+      }
+
       if (actionTarget.kind === 'issue') {
+        console.log('[DisputesTable] runAction: Processing delivery issue', {
+          issueId: actionTarget.issue.id,
+          orderId: actionTarget.issue.order_id,
+          actionType,
+        })
+
         const { data: auth } = await supabase.auth.getUser()
         const adminId = auth?.user?.id
+        console.log('[DisputesTable] runAction: Got admin user', { adminId, hasAuth: !!auth?.user })
 
         const nextStatus =
           actionType === 'escalate' ? 'investigating' : actionType === 'resolve' ? 'resolved' : 'investigating'
+        console.log('[DisputesTable] runAction: Determined next status', { actionType, nextStatus })
 
         const payload: any = {
           status: nextStatus,
@@ -422,17 +506,34 @@ export function DisputesTable() {
         if (nextStatus === 'resolved') {
           payload.resolved_by = adminId ?? null
           payload.resolved_at = new Date().toISOString()
+          console.log('[DisputesTable] runAction: Adding resolved fields', {
+            resolved_by: payload.resolved_by,
+            resolved_at: payload.resolved_at,
+          })
         }
+
+        console.log('[DisputesTable] runAction: Updating delivery_issues', {
+          issueId: actionTarget.issue.id,
+          payload,
+        })
 
         const { error } = await supabase
           .from('delivery_issues')
           .update(payload)
           .eq('id', actionTarget.issue.id)
 
-        if (error) throw error
+        if (error) {
+          console.error('[DisputesTable] runAction: Error updating delivery_issues', error)
+          throw error
+        }
+
+        console.log('[DisputesTable] runAction: Successfully updated delivery_issues')
+
+        const auditAction = actionType === 'resolve' ? 'resolve_dispute' : 'escalate_issue'
+        console.log('[DisputesTable] runAction: Logging admin audit', { auditAction })
 
         await logAdminAudit(supabase, {
-          action: actionType === 'resolve' ? 'resolve_dispute' : 'escalate_issue',
+          action: auditAction,
           targetType: 'dispute',
           targetId: actionTarget.issue.id,
           details: {
@@ -444,76 +545,157 @@ export function DisputesTable() {
           },
         })
 
+        console.log('[DisputesTable] runAction: Successfully processed issue')
         toast.success('Issue updated')
       } else {
+        console.log('[DisputesTable] runAction: Processing order dispute', {
+          orderId: actionTarget.orderId,
+          actionType,
+          refund,
+        })
+
         // Best-effort: call Edge Function `resolve_dispute` if present. Some deployments
         // may not have a dedicated disputes table; in that case we fall back to updating
         // payments/orders directly.
         const notify_parties = true
 
+        const edgeFunctionPayload = {
+          dispute_id: actionTarget.orderId,
+          resolution: actionReason,
+          refund_amount: actionType === 'refund' ? refund : undefined,
+          notify_parties,
+        }
+        console.log('[DisputesTable] runAction: Invoking resolve_dispute Edge Function', {
+          payload: edgeFunctionPayload,
+        })
+
         const edge = await invoke('resolve_dispute', {
-          body: {
-            dispute_id: actionTarget.orderId,
-            resolution: actionReason,
-            refund_amount: actionType === 'refund' ? refund : undefined,
-            notify_parties,
-          },
+          body: edgeFunctionPayload,
+        })
+
+        console.log('[DisputesTable] runAction: Edge Function response', {
+          hasError: !!edge?.error,
+          error: edge?.error,
+          hasData: !!edge?.data,
         })
 
         if (edge?.error) {
+          console.warn('[DisputesTable] runAction: Edge Function failed, using fallback logic', {
+            error: edge.error,
+          })
+
           // Fallback: update payments (refund fields) and resolve order.
           if (actionType === 'refund' && refund > 0) {
+            console.log('[DisputesTable] runAction: Processing refund fallback', {
+              orderId: actionTarget.orderId,
+              refund,
+            })
+
             // Fetch payment amount to decide refunded vs partially_refunded
+            console.log('[DisputesTable] runAction: Fetching payment for order', {
+              orderId: actionTarget.orderId,
+            })
+
             const { data: payment, error: payErr } = await supabase
               .from('payments')
               .select('id,amount')
               .eq('order_id', actionTarget.orderId)
               .single()
 
-            if (payErr) throw payErr
+            if (payErr) {
+              console.error('[DisputesTable] runAction: Error fetching payment', payErr)
+              throw payErr
+            }
+
+            console.log('[DisputesTable] runAction: Fetched payment', {
+              paymentId: payment?.id,
+              amount: payment?.amount,
+            })
 
             const totalAmount = Number(payment?.amount || 0)
             const status = refund >= totalAmount ? 'refunded' : 'partially_refunded'
+            console.log('[DisputesTable] runAction: Determined refund status', {
+              totalAmount,
+              refund,
+              status,
+            })
+
+            const paymentUpdatePayload = {
+              refund_amount: refund,
+              refund_reason: actionReason,
+              status,
+              escrow_status: 'refunded',
+            }
+            console.log('[DisputesTable] runAction: Updating payment', {
+              paymentId: payment.id,
+              payload: paymentUpdatePayload,
+            })
 
             const { error: updPayErr } = await supabase
               .from('payments')
-              .update({
-                refund_amount: refund,
-                refund_reason: actionReason,
-                status,
-                escrow_status: 'refunded',
-              })
+              .update(paymentUpdatePayload)
               .eq('id', payment.id)
 
-            if (updPayErr) throw updPayErr
+            if (updPayErr) {
+              console.error('[DisputesTable] runAction: Error updating payment', updPayErr)
+              throw updPayErr
+            }
+
+            console.log('[DisputesTable] runAction: Successfully updated payment')
           }
 
           // Mark order out of disputed state (best-effort). If refund, cancel; otherwise complete.
           const nextOrderStatus = actionType === 'refund' ? 'cancelled' : 'completed'
+          console.log('[DisputesTable] runAction: Updating order status', {
+            orderId: actionTarget.orderId,
+            nextOrderStatus,
+            actionType,
+          })
+
           await supabase.from('orders').update({ status: nextOrderStatus }).eq('id', actionTarget.orderId)
+
+          console.log('[DisputesTable] runAction: Successfully updated order status')
+        } else {
+          console.log('[DisputesTable] runAction: Edge Function succeeded, skipping fallback')
         }
 
-        await logAdminAudit(supabase, {
-          action: actionType === 'refund' ? 'resolve_dispute_refund' : 'resolve_dispute',
-          targetType: 'dispute',
-          targetId: actionTarget.orderId,
-          details: {
-            kind: 'order',
-            action: actionType,
-            notes: actionReason,
-            refund_amount: actionType === 'refund' ? refund : null,
-            used_edge_function: !edge?.error,
-          },
+        const auditAction = actionType === 'refund' ? 'resolve_dispute_refund' : 'resolve_dispute'
+        const auditDetails = {
+          kind: 'order',
+          action: actionType,
+          notes: actionReason,
+          refund_amount: actionType === 'refund' ? refund : null,
+          used_edge_function: !edge?.error,
+        }
+        console.log('[DisputesTable] runAction: Logging admin audit', {
+          auditAction,
+          details: auditDetails,
         })
 
+        await logAdminAudit(supabase, {
+          action: auditAction,
+          targetType: 'dispute',
+          targetId: actionTarget.orderId,
+          details: auditDetails,
+        })
+
+        console.log('[DisputesTable] runAction: Successfully processed dispute')
         toast.success('Dispute action applied')
       }
 
+      console.log('[DisputesTable] runAction: Clearing action target and refreshing')
       setActionTarget(null)
       await refreshAll()
+      console.log('[DisputesTable] runAction: Completed successfully')
     } catch (e: any) {
+      console.error('[DisputesTable] runAction: Error caught', {
+        error: e,
+        message: e?.message,
+        stack: e?.stack,
+      })
       toast.error(e?.message || 'Failed to apply action')
     } finally {
+      console.log('[DisputesTable] runAction: Cleaning up (setting savingAction to false)')
       setSavingAction(false)
     }
   }
@@ -690,17 +872,162 @@ export function DisputesTable() {
               </Select>
             </div>
 
-            {actionType === 'refund' ? (
-              <div className="space-y-2">
-                <Label htmlFor="refund">Refund amount (ZAR)</Label>
-                <Input
-                  id="refund"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={refundAmount}
-                  onChange={(e) => setRefundAmount(e.target.value)}
-                />
+            {/* Payment Information (for order disputes) */}
+            {actionTarget?.kind === 'order' && (
+              <div className="rounded-md border p-4 space-y-2 bg-muted/50">
+                {loadingPayment ? (
+                  <div className="text-sm text-muted-foreground">Loading payment information...</div>
+                ) : paymentInfo ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Payment Information</span>
+                      <Badge variant={paymentInfo.escrow_status === 'refunded' ? 'destructive' : 'secondary'}>
+                        {paymentInfo.escrow_status}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Total Amount:</span>
+                        <span className="ml-2 font-medium">R{paymentInfo.amount.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Already Refunded:</span>
+                        <span className="ml-2 font-medium">
+                          R{paymentInfo.refund_amount.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">Available for Refund:</span>
+                        <span className="ml-2 font-medium text-green-600">
+                          R{(paymentInfo.amount - paymentInfo.refund_amount).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    Payment information not available
+                  </div>
+                )}
+              </div>
+            )}
+
+            {actionType === 'refund' && actionTarget?.kind === 'order' && paymentInfo ? (
+              <div className="space-y-3">
+                <Label>Refund Amount</Label>
+                
+                {/* Quick-select refund percentages */}
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={refundPercentage === '90' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      const amount = (paymentInfo.amount * 0.9).toFixed(2)
+                      setRefundPercentage('90')
+                      setRefundAmount(amount)
+                    }}
+                  >
+                    90% (R{((paymentInfo.amount - paymentInfo.refund_amount) * 0.9).toFixed(2)})
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={refundPercentage === '50' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      const amount = (paymentInfo.amount * 0.5).toFixed(2)
+                      setRefundPercentage('50')
+                      setRefundAmount(amount)
+                    }}
+                  >
+                    50% (R{((paymentInfo.amount - paymentInfo.refund_amount) * 0.5).toFixed(2)})
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={refundPercentage === '100' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      const amount = (paymentInfo.amount - paymentInfo.refund_amount).toFixed(2)
+                      setRefundPercentage('100')
+                      setRefundAmount(amount)
+                    }}
+                  >
+                    Full (R{(paymentInfo.amount - paymentInfo.refund_amount).toFixed(2)})
+                  </Button>
+                </div>
+
+                {/* Custom refund amount input */}
+                <div className="space-y-2">
+                  <Label htmlFor="refund">Custom Refund Amount (ZAR)</Label>
+                  <Input
+                    id="refund"
+                    type="number"
+                    min="0"
+                    max={paymentInfo.amount - paymentInfo.refund_amount}
+                    step="0.01"
+                    value={refundAmount}
+                    onChange={(e) => {
+                      setRefundAmount(e.target.value)
+                      const val = Number(e.target.value)
+                      const maxRefund = paymentInfo.amount - paymentInfo.refund_amount
+                      if (val > 0 && maxRefund > 0) {
+                        const pct = ((val / maxRefund) * 100).toFixed(0)
+                        setRefundPercentage(pct === '100' ? '100' : pct === '90' ? '90' : pct === '50' ? '50' : 'custom')
+                      } else {
+                        setRefundPercentage('')
+                      }
+                    }}
+                    placeholder={`Max: R${(paymentInfo.amount - paymentInfo.refund_amount).toFixed(2)}`}
+                  />
+                  {refundAmount && (
+                    <div className="text-xs text-muted-foreground">
+                      {(() => {
+                        const refund = Number(refundAmount)
+                        const maxRefund = paymentInfo.amount - paymentInfo.refund_amount
+                        const pct = maxRefund > 0 ? ((refund / maxRefund) * 100).toFixed(1) : '0'
+                        return `Refund: ${pct}% of available amount`
+                      })()}
+                    </div>
+                  )}
+                  {refundAmount && Number(refundAmount) > paymentInfo.amount - paymentInfo.refund_amount && (
+                    <div className="text-xs text-destructive">
+                      Refund amount cannot exceed available refund amount
+                    </div>
+                  )}
+                </div>
+
+                {/* Refund Summary */}
+                {refundAmount && Number(refundAmount) > 0 && Number(refundAmount) <= paymentInfo.amount - paymentInfo.refund_amount && (
+                  <div className="rounded-md border p-3 bg-blue-50 dark:bg-blue-950 space-y-1">
+                    <div className="text-sm font-medium">Refund Summary</div>
+                    <div className="text-xs space-y-1">
+                      <div className="flex justify-between">
+                        <span>Refund Amount:</span>
+                        <span className="font-medium">R{Number(refundAmount).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Platform Fee (10%):</span>
+                        <span>R{(paymentInfo.amount * 0.1).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Order Status After:</span>
+                        <span className="font-medium">Cancelled</span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Payment Status After:</span>
+                        <span className="font-medium">
+                          {Number(refundAmount) >= paymentInfo.amount - paymentInfo.refund_amount
+                            ? 'Refunded'
+                            : 'Partially Refunded'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : actionType === 'refund' && actionTarget?.kind === 'order' ? (
+              <div className="text-sm text-muted-foreground">
+                Loading payment information to calculate refund...
               </div>
             ) : null}
 

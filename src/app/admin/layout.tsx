@@ -11,7 +11,6 @@ export default function AdminLayout({
   // This uses the auth context which has the shared Supabase client instance
   // and can properly read the session from cookies
   return (
-    <AuthGuard requiredRole="admin">
       <div className="flex h-screen overflow-hidden">
         <Sidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -19,6 +18,5 @@ export default function AdminLayout({
           <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>
-    </AuthGuard>
   )
 }

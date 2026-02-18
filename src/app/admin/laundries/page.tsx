@@ -43,7 +43,7 @@ async function fetchLaundries(status: string, supabase: ReturnType<typeof import
 }
 
 export default function LaundriesPage() {
-  const [activeTab, setActiveTab] = useState('pending_approval')
+  const [activeTab, setActiveTab] = useState('pending')
   const [refreshKey, setRefreshKey] = useState(0)
   const { supabase } = useAuth()
 
