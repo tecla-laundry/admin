@@ -29,20 +29,35 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 // This ensures all auth operations use the same client with shared session state
 let authSupabaseClient: ReturnType<typeof createClient> | null = null
 
+function getSupabaseClient() {
+  if (!authSupabaseClient) {
+    authSupabaseClient = createClient()
+  }
+  return authSupabaseClient
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [supabase, setSupabase] = useState<ReturnType<typeof createClient> | null>(null)
   const router = useRouter()
   const refreshingRef = useRef(false)
-  
-  // Use singleton client instance
-  if (!authSupabaseClient) {
-    authSupabaseClient = createClient()
-  }
-  const supabase = authSupabaseClient
+
+  // Initialize the Supabase client on the client side only
+  useEffect(() => {
+    try {
+      const client = getSupabaseClient()
+      setSupabase(client)
+    } catch (e) {
+      console.error('[AuthContext] Failed to create Supabase client:', e)
+      setLoading(false)
+    }
+  }, [])
 
   const refreshSession = async (session?: Session | null) => {
+    if (!supabase) return
+    
     // Prevent concurrent calls
     if (refreshingRef.current) {
       console.log('[AuthContext] refreshSession: Already refreshing, skipping...')
@@ -154,6 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => {
+    if (!supabase) return
     try {
       const { error } = await supabase.auth.signOut()
       if (error) throw error
@@ -167,6 +183,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    if (!supabase) return
+    
     console.log('[AuthContext] useEffect: Initializing auth context')
     
     let hasReceivedInitialSession = false
@@ -235,7 +253,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [supabase])
+
+  // During initial SSR/hydration before useEffect runs, supabase may be null
+  // We render children anyway since loading=true will prevent auth-dependent UI
+  if (!supabase) {
+    return (
+      <AuthContext.Provider value={{ user: null, profile: null, loading: true, supabase: null as any, signOut, refreshSession }}>
+        {children}
+      </AuthContext.Provider>
+    )
+  }
 
   return (
     <AuthContext.Provider value={{ user, profile, loading, supabase, signOut, refreshSession }}>
