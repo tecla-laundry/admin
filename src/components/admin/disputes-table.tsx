@@ -17,6 +17,7 @@ import { toast } from 'sonner'
 
 import { useAuth } from '@/contexts/auth-context'
 import { logAdminAudit } from '@/lib/admin-audit'
+import { useEdgeFunction } from '@/hooks/use-edge-function'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -207,6 +208,7 @@ function severityBadgeVariant(sev: string | null) {
 
 export function DisputesTable() {
   const { supabase } = useAuth()
+  const { invoke } = useEdgeFunction()
 
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -449,7 +451,7 @@ export function DisputesTable() {
         // payments/orders directly.
         const notify_parties = true
 
-        const edge = await supabase.functions.invoke('resolve_dispute', {
+        const edge = await invoke('resolve_dispute', {
           body: {
             dispute_id: actionTarget.orderId,
             resolution: actionReason,

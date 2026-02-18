@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/table'
 import { LaundryDetailDialog } from './laundry-detail-dialog'
 import { useAuth } from '@/contexts/auth-context'
+import { useEdgeFunction } from '@/hooks/use-edge-function'
 
 interface Laundry {
   id: string
@@ -68,6 +69,7 @@ export function LaundryTable({ data, onRefresh }: LaundryTableProps) {
   const [bulkRejectReason, setBulkRejectReason] = useState('')
   const [bulkLoading, setBulkLoading] = useState(false)
   const { supabase } = useAuth()
+  const { invoke } = useEdgeFunction()
 
   const filteredData = useMemo(() => {
     return data.filter((laundry) => {
@@ -241,7 +243,7 @@ export function LaundryTable({ data, onRefresh }: LaundryTableProps) {
     setBulkLoading(true)
     try {
       for (const row of pending) {
-        const { error } = await supabase.functions.invoke('approve_laundry_partner', {
+        const { error } = await invoke('approve_laundry_partner', {
           body: { laundry_id: row.original.id },
         })
         if (error) throw error
@@ -271,7 +273,7 @@ export function LaundryTable({ data, onRefresh }: LaundryTableProps) {
     setBulkLoading(true)
     try {
       for (const row of pending) {
-        const { error } = await supabase.functions.invoke('reject_laundry_partner', {
+        const { error } = await invoke('reject_laundry_partner', {
           body: { laundry_id: row.original.id, reason: bulkRejectReason },
         })
         if (error) throw error

@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label'
 import { useAuth } from '@/contexts/auth-context'
 import { toast } from 'sonner'
 import { logAdminAudit } from '@/lib/admin-audit'
+import { useEdgeFunction } from '@/hooks/use-edge-function'
 import {
   MapPin,
   Clock,
@@ -147,6 +148,7 @@ export function OrderDetailDrawer({
   onUpdated,
 }: OrderDetailDrawerProps) {
   const { supabase } = useAuth()
+  const { invoke } = useEdgeFunction()
   const [loading, setLoading] = useState(false)
   const [orderDetails, setOrderDetails] = useState<any>(null)
   const [statusHistory, setStatusHistory] = useState<any[]>([])
@@ -227,7 +229,7 @@ export function OrderDetailDrawer({
 
     setLoading(true)
     try {
-      const { data, error } = await supabase.functions.invoke('force_order_status', {
+      const { data, error } = await invoke('force_order_status', {
         body: {
           order_id: order.id,
           new_status: newStatus,
@@ -268,7 +270,7 @@ export function OrderDetailDrawer({
 
     setLoading(true)
     try {
-      const { data, error } = await supabase.functions.invoke('dispatch_driver', {
+      const { data, error } = await invoke('dispatch_driver', {
         body: {
           order_id: order.id,
           delivery_type: order.status.includes('pickup') ? 'pickup' : 'delivery',

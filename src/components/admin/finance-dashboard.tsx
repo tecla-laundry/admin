@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 
 import { useAuth } from '@/contexts/auth-context'
 import { logAdminAudit } from '@/lib/admin-audit'
+import { useEdgeFunction } from '@/hooks/use-edge-function'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -110,6 +111,7 @@ function endOfDayIso(d: string) {
 
 export function FinanceDashboard() {
   const { supabase } = useAuth()
+  const { invoke } = useEdgeFunction()
 
   // Commission settings
   const [commissionRate, setCommissionRate] = useState('0.15')
@@ -244,7 +246,7 @@ export function FinanceDashboard() {
     }
     setProcessingPayouts(true)
     try {
-      const { data, error } = await supabase.functions.invoke('process_payouts', {
+      const { data, error } = await invoke('process_payouts', {
         body: { period_start: periodStart, period_end: periodEnd },
       })
       if (error) throw error

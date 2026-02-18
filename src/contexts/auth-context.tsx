@@ -25,14 +25,52 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+const AUTH_CACHE_KEY = 'admin-auth-state-v1'
+
+interface CachedAuthState {
+  user: User | null
+  profile: Profile | null
+}
+
+function loadCachedAuthState(): CachedAuthState | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(AUTH_CACHE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as CachedAuthState
+  } catch (error) {
+    console.error('[AuthContext] Failed to load cached auth state', error)
+    return null
+  }
+}
+
+function saveCachedAuthState(state: CachedAuthState) {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(state))
+  } catch (error) {
+    console.error('[AuthContext] Failed to save cached auth state', error)
+  }
+}
+
+function clearCachedAuthState() {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.removeItem(AUTH_CACHE_KEY)
+  } catch {
+    // ignore
+  }
+}
+
 // Create a single Supabase client instance for the auth context
 // This ensures all auth operations use the same client with shared session state
 let authSupabaseClient: ReturnType<typeof createClient> | null = null
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [initialAuthState] = useState<CachedAuthState | null>(() => loadCachedAuthState())
+  const [user, setUser] = useState<User | null>(initialAuthState?.user ?? null)
+  const [profile, setProfile] = useState<Profile | null>(initialAuthState?.profile ?? null)
+  const [loading, setLoading] = useState<boolean>(() => !initialAuthState)
   const router = useRouter()
   const refreshingRef = useRef(false)
   
@@ -51,7 +89,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     console.log('\n\n[AuthContext] refreshSession: Starting...', { hasSession: !!session })
     refreshingRef.current = true
-    setLoading(true)
+    // Only block the UI if we don't already have a user/profile
+    setLoading((prev) => {
+      if (user || profile) {
+        return prev
+      }
+      return true
+    })
     
     try {
       let currentUser: User | null = null
@@ -93,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('[AuthContext] refreshSession: User error detected, clearing state')
         setUser(null)
         setProfile(null)
+        clearCachedAuthState()
         setLoading(false)
         refreshingRef.current = false
         return
@@ -127,18 +172,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           if (!profileResult.error && profileResult.data) {
             console.log('[AuthContext] refreshSession: Setting profile state')
-            setProfile(profileResult.data as Profile)
+            const nextProfile = profileResult.data as Profile
+            setProfile(nextProfile)
+            saveCachedAuthState({ user: currentUser, profile: nextProfile })
           } else {
             console.log('[AuthContext] refreshSession: No profile found or error, clearing profile. Error:', profileResult.error)
             setProfile(null)
+            saveCachedAuthState({ user: currentUser, profile: null })
           }
         } catch (profileError: any) {
           console.error('[AuthContext] refreshSession: Profile fetch exception:', profileError)
           setProfile(null)
+          saveCachedAuthState({ user: currentUser, profile: null })
         }
       } else {
         console.log('[AuthContext] refreshSession: No user, clearing profile')
         setProfile(null)
+        clearCachedAuthState()
       }
       
       console.log('[AuthContext] refreshSession: Successfully completed')
@@ -146,6 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('[AuthContext] refreshSession: Error caught:', error)
       setUser(null)
       setProfile(null)
+      clearCachedAuthState()
     } finally {
       console.log('[AuthContext] refreshSession: Setting loading to false')
       setLoading(false)
@@ -159,6 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) throw error
       setUser(null)
       setProfile(null)
+      clearCachedAuthState()
       router.push('/')
       router.refresh()
     } catch (error) {
@@ -187,11 +239,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await refreshSession(session)
         } else {
           console.log('[AuthContext] useEffect: No existing session found')
+          setUser(null)
+          setProfile(null)
+          clearCachedAuthState()
           setLoading(false)
           refreshingRef.current = false
         }
       } catch (error) {
         console.error('[AuthContext] useEffect: Error in initializeSession:', error)
+        setUser(null)
+        setProfile(null)
+        clearCachedAuthState()
         setLoading(false)
         refreshingRef.current = false
       }
@@ -219,7 +277,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         console.log('[AuthContext] onAuthStateChange: Refreshing session for', event)
         // Pass the session directly to avoid calling getUser() again
-        await refreshSession(session)
+        //await refreshSession(session)
+        setLoading(false)
       } else if (event === 'SIGNED_OUT') {
         console.log('[AuthContext] onAuthStateChange: User signed out, clearing state')
         refreshingRef.current = false

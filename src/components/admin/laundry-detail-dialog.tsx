@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { Input } from '@/components/ui/input'
 import { logAdminAudit } from '@/lib/admin-audit'
+import { useEdgeFunction } from '@/hooks/use-edge-function'
 
 interface Laundry {
   id: string
@@ -59,6 +60,7 @@ export function LaundryDetailDialog({
   const [loading, setLoading] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const { supabase } = useAuth()
+  const { invoke } = useEdgeFunction()
   const [isEditing, setIsEditing] = useState(false)
   const [businessName, setBusinessName] = useState(laundry?.business_name ?? '')
   const [address, setAddress] = useState(laundry?.physical_address ?? '')
@@ -90,7 +92,7 @@ export function LaundryDetailDialog({
     if (!laundry) return
     setLoading(true)
     try {
-      const { data, error } = await supabase.functions.invoke('approve_laundry_partner', {
+      const { data, error } = await invoke('approve_laundry_partner', {
         body: { laundry_id: laundry.id },
       })
 
@@ -113,7 +115,7 @@ export function LaundryDetailDialog({
     }
     setLoading(true)
     try {
-      const { data, error } = await supabase.functions.invoke('reject_laundry_partner', {
+      const { data, error } = await invoke('reject_laundry_partner', {
         body: { laundry_id: laundry.id, reason: rejectReason },
       })
 

@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/contexts/auth-context'
 import { logAdminAudit } from '@/lib/admin-audit'
+import { useEdgeFunction } from '@/hooks/use-edge-function'
 
 const inviteSchema = z.object({
   email: z.string().email('Enter a valid email address'),
@@ -25,6 +26,7 @@ type InviteFormValues = z.infer<typeof inviteSchema>
  */
 export function AdminInviteDialog() {
   const { supabase } = useAuth()
+  const { invoke } = useEdgeFunction()
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -37,7 +39,7 @@ export function AdminInviteDialog() {
   const onSubmit = async (values: InviteFormValues) => {
     setSubmitting(true)
     try {
-      const { data, error } = await supabase.functions.invoke('invite_admin', {
+      const { data, error } = await invoke('invite_admin', {
         body: { email: values.email, role: 'admin' },
       })
 
