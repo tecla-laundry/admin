@@ -27,7 +27,7 @@ interface Laundry {
   latitude: number
   longitude: number
   status: string
-  services_offered: string[]
+  services_offered: ServicesOffered
   price_per_kg: number
   capacity_per_day: number
   operating_hours: Record<string, { open: string; close: string }>
@@ -47,6 +47,30 @@ interface LaundryDetailDialogProps {
   onApproved?: () => void
   onRejected?: () => void
   onUpdated?: () => void
+}
+
+interface ServicesOffered {
+  express: boolean
+  dry_clean: boolean
+  iron_only: boolean
+  wash_and_fold: boolean
+}
+
+const getServices = (s: ServicesOffered) => {
+  let services = [];
+  if(s?.express){
+    services.push('Express')
+  }
+  if(s?.dry_clean){
+    services.push('Dry Clean')
+  }
+  if(s?.iron_only){
+    services.push('Iron Only')
+  }
+  if(s?.wash_and_fold){
+    services.push('Wash and Fold')
+  }
+  return services.join(', ')
 }
 
 export function LaundryDetailDialog({
@@ -71,7 +95,7 @@ export function LaundryDetailDialog({
     laundry ? String(laundry.capacity_per_day) : ''
   )
   const [servicesRaw, setServicesRaw] = useState<string>(
-    laundry ? laundry.services_offered.join(', ') : ''
+    laundry ? getServices(laundry.services_offered) : ''
   )
 
   useEffect(() => {
@@ -80,7 +104,7 @@ export function LaundryDetailDialog({
       setAddress(laundry.physical_address)
       setPricePerKg(String(laundry.price_per_kg))
       setCapacityPerDay(String(laundry.capacity_per_day))
-      setServicesRaw(laundry.services_offered.join(', '))
+      setServicesRaw(getServices(laundry.services_offered))
       setIsEditing(false)
       setRejectReason('')
     }
@@ -300,7 +324,7 @@ export function LaundryDetailDialog({
                 />
               ) : (
                 <div className="flex flex-wrap gap-2 mt-1">
-                  {laundry.services_offered.map((service) => (
+                  {getServices(laundry.services_offered).split(',').map((service) => (
                     <span
                       key={service}
                       className="px-2 py-1 text-xs bg-muted rounded-md"
