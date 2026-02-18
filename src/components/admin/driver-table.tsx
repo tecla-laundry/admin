@@ -34,6 +34,7 @@ import { DriverDetailDialog } from './driver-detail-dialog'
 import { useAuth } from '@/contexts/auth-context'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { logAdminAudit } from '@/lib/admin-audit'
 
 interface Driver {
   id: string
@@ -168,16 +169,14 @@ export function DriverTable({ onRefresh }: DriverTableProps) {
       if (error) throw error
 
       // Log to audit
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.from('admin_audit_logs').insert({
-          admin_id: user.id,
+      try {
+        await logAdminAudit(supabase, {
           action: currentStatus ? 'suspend_driver' : 'activate_driver',
-          resource_type: 'driver',
-          resource_id: driverId,
+          targetType: 'driver',
+          targetId: driverId,
           details: { is_active: !currentStatus },
         })
-      }
+      } catch {}
 
       toast.success(`Driver ${currentStatus ? 'suspended' : 'activated'} successfully`)
       refetch()

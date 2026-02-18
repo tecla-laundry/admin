@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/contexts/auth-context'
 import { toast } from 'sonner'
+import { logAdminAudit } from '@/lib/admin-audit'
 import { MapPin, Phone, Mail, Calendar, Car, Award, TrendingUp, DollarSign } from 'lucide-react'
 
 interface Driver {
@@ -127,16 +128,14 @@ export function DriverDetailDialog({
       if (error) throw error
 
       // Log to audit
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.from('admin_audit_logs').insert({
-          admin_id: user.id,
+      try {
+        await logAdminAudit(supabase, {
           action: driver.is_active ? 'suspend_driver' : 'activate_driver',
-          resource_type: 'driver',
-          resource_id: driver.id,
+          targetType: 'driver',
+          targetId: driver.id,
           details: { is_active: !driver.is_active },
         })
-      }
+      } catch {}
 
       toast.success(`Driver ${driver.is_active ? 'suspended' : 'activated'} successfully`)
       onUpdated?.()

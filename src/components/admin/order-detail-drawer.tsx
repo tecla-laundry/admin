@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/contexts/auth-context'
 import { toast } from 'sonner'
+import { logAdminAudit } from '@/lib/admin-audit'
 import {
   MapPin,
   Clock,
@@ -237,20 +238,18 @@ export function OrderDetailDrawer({
       if (error) throw error
 
       // Log to audit
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.from('admin_audit_logs').insert({
-          admin_id: user.id,
-          action: 'force_order_status_change',
-          resource_type: 'order',
-          resource_id: order.id,
+      try {
+        await logAdminAudit(supabase, {
+          action: 'force_order_status',
+          targetType: 'order',
+          targetId: order.id,
           details: {
             from_status: order.status,
             to_status: newStatus,
             reason: statusChangeReason,
           },
         })
-      }
+      } catch {}
 
       toast.success('Order status updated successfully')
       setNewStatus('')
@@ -279,16 +278,14 @@ export function OrderDetailDrawer({
       if (error) throw error
 
       // Log to audit
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.from('admin_audit_logs').insert({
-          admin_id: user.id,
+      try {
+        await logAdminAudit(supabase, {
           action: 'redispatch_driver',
-          resource_type: 'order',
-          resource_id: order.id,
+          targetType: 'order',
+          targetId: order.id,
           details: { delivery_type: order.status.includes('pickup') ? 'pickup' : 'delivery' },
         })
-      }
+      } catch {}
 
       toast.success('Driver re-dispatch initiated')
       onUpdated?.()

@@ -1,5 +1,8 @@
+'use client'
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { AdminInviteDialog } from '@/components/admin/admin-invite-dialog'
+import { AdminsTable } from '@/components/admin/admins-table'
 
 export default function AdminsPage() {
   return (
@@ -11,7 +14,7 @@ export default function AdminsPage() {
             Invite and manage admin users
           </p>
         </div>
-        <Button>Invite Admin</Button>
+        <AdminInviteDialog />
       </div>
 
       <Card>
@@ -22,11 +25,7 @@ export default function AdminsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Admin users table will be implemented here.
-            Features: invite new admin (calls invite_admin Edge Function),
-            list active admins, revoke access.
-          </p>
+          <AdminsTable />
         </CardContent>
       </Card>
     </div>
