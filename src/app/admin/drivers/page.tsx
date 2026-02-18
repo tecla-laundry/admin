@@ -1,4 +1,7 @@
+'use client'
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { DriverTable } from '@/components/admin/driver-table'
 
 export default function DriversPage() {
   return (
@@ -18,13 +21,7 @@ export default function DriversPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Data table with TanStack Table will be implemented here.
-            Features: filters (active/inactive, rating, acceptance rate, current load),
-            approve/suspend/deactivate actions, live location map view,
-            performance metrics (on-time %, acceptance rate, earnings),
-            detail view with license, vehicle, completed deliveries, issues reported.
-          </p>
+          <DriverTable />
         </CardContent>
       </Card>
     </div>

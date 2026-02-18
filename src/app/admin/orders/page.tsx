@@ -1,4 +1,7 @@
+'use client'
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { OrderTable } from '@/components/admin/order-table'
 
 export default function OrdersPage() {
   return (
@@ -18,13 +21,7 @@ export default function OrdersPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Data table with TanStack Table will be implemented here.
-            Features: filters (status, date range, customer, laundry, driver, amount),
-            detail drawer with full timeline, all photos (pickup/dropoff), OTPs, signatures,
-            driver live tracking link, manual intervention (force status change with audit log),
-            re-dispatch driver (calls dispatch_driver Edge Function), export to CSV.
-          </p>
+          <OrderTable />
         </CardContent>
       </Card>
     </div>
