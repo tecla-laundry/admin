@@ -39,11 +39,11 @@ export function Sidebar() {
   }
 
   return (
-    <div className="flex h-full w-64 flex-col border-r bg-card">
+    <div className="hidden md:flex h-full w-64 flex-col border-r bg-card">
       <div className="flex h-16 items-center border-b px-6">
         <h1 className="text-xl font-bold">Admin Dashboard</h1>
       </div>
-      <nav className="flex-1 space-y-1 p-4">
+      <nav className="flex-1 space-y-1 p-4" aria-label="Main navigation">
         {navigation.map((item) => {
           const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
           return (
@@ -51,13 +51,14 @@ export function Sidebar() {
               key={item.name}
               href={item.href}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 isActive
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               )}
+              aria-current={isActive ? 'page' : undefined}
             >
-              <item.icon className="h-5 w-5" />
+              <item.icon className="h-5 w-5" aria-hidden="true" />
               {item.name}
             </Link>
           )
@@ -68,8 +69,9 @@ export function Sidebar() {
           variant="ghost"
           className="w-full justify-start"
           onClick={handleSignOut}
+          aria-label="Sign out"
         >
-          <ExitIcon className="mr-2 h-4 w-4" />
+          <ExitIcon className="mr-2 h-4 w-4" aria-hidden="true" />
           Sign Out
         </Button>
       </div>

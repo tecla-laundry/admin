@@ -36,6 +36,10 @@ import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Download } from 'lucide-react'
 import { format } from 'date-fns'
+import { useRealtime } from '@/hooks/use-realtime'
+import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/empty-state'
+import { Package } from 'lucide-react'
 
 type OrderStatus =
   | 'pending'
@@ -266,6 +270,19 @@ export function OrderTable({ onRefresh }: OrderTableProps) {
     queryFn: () => fetchOrders(supabase, filters),
   })
 
+  // Real-time subscription for orders
+  useRealtime({
+    table: 'orders',
+    queryKeys: [['orders', filters]],
+    onInsert: () => {
+      refetch()
+      toast.info('New order received')
+    },
+    onUpdate: () => {
+      refetch()
+    },
+  })
+
   const handleExportCSV = () => {
     if (!data || data.length === 0) {
       toast.error('No orders to export')
@@ -397,12 +414,42 @@ export function OrderTable({ onRefresh }: OrderTableProps) {
   })
 
   if (isLoading) {
-    return <div className="text-center py-8">Loading orders...</div>
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-10 w-48" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (!data || data.length === 0) {
+    return (
+      <EmptyState
+        icon={Package}
+        title="No orders found"
+        description="There are no orders matching your filters. Try adjusting your search criteria."
+        action={
+          Object.keys(filters).length > 0
+            ? {
+                label: 'Clear filters',
+                onClick: () => setFilters({}),
+              }
+            : undefined
+        }
+      />
+    )
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4 flex-wrap">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 flex-wrap">
         <Input
           placeholder="Search by order ID..."
           value={(table.getColumn('id')?.getFilterValue() as string) ?? ''}

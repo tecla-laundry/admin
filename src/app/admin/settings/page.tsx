@@ -234,16 +234,16 @@ export default function SettingsPage() {
         </TabsList>
 
         <TabsContent value="coverage" className="space-y-4">
-          <Card>
-            <CardHeader>
+      <Card>
+        <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MapPin className="h-5 w-5" />
                 Coverage Areas
               </CardTitle>
-              <CardDescription>
+          <CardDescription>
                 Configure service coverage areas and default radius for driver matching
-              </CardDescription>
-            </CardHeader>
+          </CardDescription>
+        </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="default-radius">Default Radius (km)</Label>
@@ -282,21 +282,21 @@ export default function SettingsPage() {
               >
                 {saving === 'coverage' ? 'Saving...' : 'Save Coverage Settings'}
               </Button>
-            </CardContent>
-          </Card>
+        </CardContent>
+      </Card>
         </TabsContent>
 
         <TabsContent value="dispatch" className="space-y-4">
-          <Card>
-            <CardHeader>
+      <Card>
+        <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
                 Dispatch Settings
               </CardTitle>
-              <CardDescription>
-                Configure dispatch timeouts and driver matching parameters
-              </CardDescription>
-            </CardHeader>
+          <CardDescription>
+            Configure dispatch timeouts and driver matching parameters
+          </CardDescription>
+        </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="dispatch-timeout">Dispatch Timeout (seconds)</Label>
@@ -352,22 +352,22 @@ export default function SettingsPage() {
               >
                 {saving === 'dispatch' ? 'Saving...' : 'Save Dispatch Settings'}
               </Button>
-            </CardContent>
-          </Card>
+        </CardContent>
+      </Card>
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-4">
-          <Card>
-            <CardHeader>
+      <Card>
+        <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Bell className="h-5 w-5" />
                 Notification Templates
               </CardTitle>
-              <CardDescription>
+          <CardDescription>
                 Manage email and SMS notification templates used across the platform
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
               {templatesLoading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading templates...</div>
               ) : templates.length === 0 ? (
@@ -410,22 +410,22 @@ export default function SettingsPage() {
               )}
               <p className="text-sm text-muted-foreground mt-4">
                 Template editing functionality will be available in a future update
-              </p>
-            </CardContent>
-          </Card>
+          </p>
+        </CardContent>
+      </Card>
         </TabsContent>
 
         <TabsContent value="features" className="space-y-4">
-          <Card>
-            <CardHeader>
+      <Card>
+        <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ToggleLeft className="h-5 w-5" />
                 Feature Flags
               </CardTitle>
-              <CardDescription>
+          <CardDescription>
                 Enable or disable platform features globally
-              </CardDescription>
-            </CardHeader>
+          </CardDescription>
+        </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
@@ -444,7 +444,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label htmlFor="auto-dispatch">Auto Dispatch</Label>
-                  <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
                     Automatically dispatch drivers when orders are ready for pickup or delivery
                   </p>
                 </div>
@@ -461,8 +461,8 @@ export default function SettingsPage() {
               >
                 {saving === 'feature-flags' ? 'Saving...' : 'Save Feature Flags'}
               </Button>
-            </CardContent>
-          </Card>
+        </CardContent>
+      </Card>
         </TabsContent>
       </Tabs>
     </div>
