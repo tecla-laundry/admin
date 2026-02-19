@@ -238,7 +238,7 @@ export function AdminsTable() {
           <DialogHeader>
             <DialogTitle>Revoke admin access</DialogTitle>
             <DialogDescription>
-              This will downgrade the user’s role to <code className="font-mono">customer</code> and immediately block access to the admin dashboard.
+              This will remove admin access and convert the account to a regular customer account. The user will no longer be able to access the admin dashboard.
             </DialogDescription>
           </DialogHeader>
 

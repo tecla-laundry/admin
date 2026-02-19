@@ -21,8 +21,8 @@ const inviteSchema = z.object({
 type InviteFormValues = z.infer<typeof inviteSchema>
 
 /**
- * Invites a new admin user by calling the `invite_admin` Supabase Edge Function.
- * The function is expected to validate caller permissions server-side.
+ * Invites a new admin user by sending an invitation email.
+ * The system validates permissions before sending the invite.
  */
 export function AdminInviteDialog() {
   const { supabase } = useAuth()
@@ -74,7 +74,7 @@ export function AdminInviteDialog() {
         <DialogHeader>
           <DialogTitle>Invite new admin</DialogTitle>
           <DialogDescription>
-            Sends an admin invite email via the <code className="font-mono">invite_admin</code> Edge Function.
+            Send an invitation email to grant admin access to a new user
           </DialogDescription>
         </DialogHeader>
 

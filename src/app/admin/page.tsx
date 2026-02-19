@@ -127,12 +127,12 @@ export default async function AdminDashboard() {
       <Card>
         <CardHeader>
           <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>Last 10 status changes and actions</CardDescription>
+          <CardDescription>Recent activity and changes across the platform</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Activity feed will be displayed here with real-time updates via Supabase Realtime
+              Recent activity and changes will be displayed here with real-time updates
             </p>
           </div>
         </CardContent>

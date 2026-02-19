@@ -15,7 +15,7 @@ export default function DisputesPage() {
         <CardHeader>
           <CardTitle>Open Disputes</CardTitle>
           <CardDescription>
-            Orders with status = &apos;disputed&apos; or issues reported by any party
+            Orders that have been disputed or have issues reported by customers, partners, or drivers
           </CardDescription>
         </CardHeader>
         <CardContent>

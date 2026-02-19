@@ -274,7 +274,7 @@ export function FinanceDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Commission Management</CardTitle>
-            <CardDescription>Global rate (default 15%) + per-laundry overrides</CardDescription>
+            <CardDescription>Set the default commission rate for all partners, with the option to customize rates for individual partners</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -354,7 +354,7 @@ export function FinanceDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Payout Overview</CardTitle>
-            <CardDescription>Pending laundry payouts, driver payouts, escrow balance</CardDescription>
+            <CardDescription>View pending payments for partners and drivers, plus funds held in the system</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {loadingPayoutSummary ? (
@@ -391,7 +391,7 @@ export function FinanceDashboard() {
               {processingPayouts ? 'Processing…' : 'Process Weekly Payouts'}
             </Button>
             <p className="text-xs text-muted-foreground">
-              Calls <code className="font-mono">process_payouts</code> Edge Function.
+              Processes weekly payouts for all partners and drivers
             </p>
           </CardContent>
         </Card>
@@ -400,7 +400,7 @@ export function FinanceDashboard() {
       <Card>
         <CardHeader>
           <CardTitle>Earnings Reports</CardTitle>
-          <CardDescription>Detailed earnings breakdown (laundry vs driver vs platform)</CardDescription>
+          <CardDescription>View detailed earnings breakdown showing how revenue is distributed between partners, drivers, and the platform</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-3 flex-wrap items-end">

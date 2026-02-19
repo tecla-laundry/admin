@@ -610,7 +610,7 @@ export function OrderDetailDrawer({
             <CardHeader>
               <CardTitle>Manual Intervention</CardTitle>
               <CardDescription>
-                Force status changes or re-dispatch drivers (with audit log)
+                Manually update order status or assign a new driver. All changes are recorded for audit purposes.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

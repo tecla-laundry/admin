@@ -17,7 +17,7 @@ export default function OrdersPage() {
         <CardHeader>
           <CardTitle>All Orders</CardTitle>
           <CardDescription>
-            Unified table of all orders with full status machine (pending → completed)
+            View and manage all orders from placement to completion
           </CardDescription>
         </CardHeader>
         <CardContent>

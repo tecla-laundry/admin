@@ -853,7 +853,7 @@ export function DisputesTable() {
           <DialogHeader>
             <DialogTitle>Resolve / refund / escalate</DialogTitle>
             <DialogDescription>
-              Actions are logged to <code className="font-mono">admin_audit_logs</code>. If available, notifications are sent via Edge Function.
+              All actions are logged for audit purposes. Affected parties will be notified automatically.
             </DialogDescription>
           </DialogHeader>
 
