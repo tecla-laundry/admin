@@ -11,7 +11,7 @@ interface UseRealtimeOptions {
   onInsert?: (payload: any) => void
   onUpdate?: (payload: any) => void
   onDelete?: (payload: any) => void
-  queryKeys?: string[][]
+  queryKeys?: (string | any)[][]
 }
 
 export function useRealtime({
