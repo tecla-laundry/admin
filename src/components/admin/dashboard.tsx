@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { motion } from 'framer-motion'
 import {
   Bar,
   BarChart,
@@ -23,6 +24,7 @@ import { useRealtime } from '@/hooks/use-realtime'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { AdminKpiCard } from '@/components/admin/kpi-card'
 import {
   CubeIcon,
   SymbolIcon,
@@ -33,7 +35,7 @@ import {
 } from '@radix-ui/react-icons'
 import { MapPin, Activity } from 'lucide-react'
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8']
+const COLORS = ['hsl(var(--primary))', '#059669', '#64748B', '#F59E0B', '#8B5CF6']
 
 // Fetch KPIs
 async function fetchKPIs(
@@ -478,13 +480,46 @@ export function Dashboard() {
     ]
   }, [driverAcceptance])
 
+  const greeting = useMemo(() => {
+    const h = new Date().getHours()
+    if (h < 12) return 'Good morning'
+    if (h < 18) return 'Good afternoon'
+    return 'Good evening'
+  }, [])
+
   return (
     <div className="space-y-6">
+      {/* Hero */}
+      <motion.section
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="relative rounded-2xl overflow-hidden min-h-[140px] md:min-h-[160px] bg-gradient-to-br from-primary/20 via-primary/10 to-navy-900/10 dark:from-primary/15 dark:to-navy-900/30"
+        aria-label="Dashboard overview"
+      >
+        <div className="relative z-10 flex flex-col justify-end p-6 md:p-8 h-full min-h-[140px] md:min-h-[160px]">
+          <p className="text-sm font-medium text-foreground/90 mb-1">{greeting}</p>
+          {kpisLoading ? (
+            <Skeleton className="h-9 w-32 mb-1" />
+          ) : (
+            <p className="text-2xl md:text-3xl font-bold text-foreground tracking-tight">
+              {kpis ? `${kpis.todayOrders} orders today` : '—'}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">Platform overview</p>
+        </div>
+      </motion.section>
+
       {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.1 }}
+        className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+      >
         {kpisLoading
           ? Array.from({ length: 8 }).map((_, i) => (
-              <Card key={i}>
+              <Card key={i} className="rounded-xl">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <Skeleton className="h-4 w-24" />
                   <Skeleton className="h-4 w-4" />
@@ -495,27 +530,35 @@ export function Dashboard() {
                 </CardContent>
               </Card>
             ))
-          : kpiCards.map((kpi) => {
-              const Icon = kpi.icon
-              return (
-                <Card key={kpi.title}>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">{kpi.title}</CardTitle>
-                    <Icon className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{kpi.value}</div>
-                    <p className="text-xs text-muted-foreground">{kpi.description}</p>
-                  </CardContent>
-                </Card>
-              )
-            })}
-      </div>
+          : kpiCards.map((kpi, i) => (
+              <AdminKpiCard
+                key={kpi.title}
+                title={kpi.title}
+                value={kpi.value}
+                numericValue={
+                  typeof kpi.value === 'number'
+                    ? kpi.value
+                    : typeof kpi.value === 'string' && kpi.value.startsWith('R')
+                      ? parseFloat(kpi.value.replace(/[R,]/g, '')) || 0
+                      : undefined
+                }
+                description={kpi.description}
+                icon={kpi.icon}
+                accent={i < 2 ? 'sage' : i < 4 ? 'muted' : 'sky'}
+                loading={kpisLoading}
+              />
+            ))}
+      </motion.div>
 
       {/* Charts */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+        className="grid gap-4 md:grid-cols-2"
+      >
         {/* Orders by Status */}
-        <Card>
+        <Card className="rounded-xl">
           <CardHeader>
             <CardTitle>Orders by Status</CardTitle>
             <CardDescription>Last 30 days</CardDescription>
@@ -530,7 +573,7 @@ export function Dashboard() {
                   <XAxis dataKey="status" angle={-45} textAnchor="end" height={100} />
                   <YAxis />
                   <Tooltip />
-                  <Bar dataKey="count" fill="#0088FE" />
+                  <Bar dataKey="count" fill="hsl(var(--primary))" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -542,7 +585,7 @@ export function Dashboard() {
         </Card>
 
         {/* Revenue Trend */}
-        <Card>
+        <Card className="rounded-xl">
           <CardHeader>
             <CardTitle>Revenue Trend</CardTitle>
             <CardDescription>Last 30 days</CardDescription>
@@ -558,7 +601,7 @@ export function Dashboard() {
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Line type="monotone" dataKey="revenue" stroke="#00C49F" strokeWidth={2} />
+                  <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -570,7 +613,7 @@ export function Dashboard() {
         </Card>
 
         {/* Top 5 Laundries */}
-        <Card>
+        <Card className="rounded-xl">
           <CardHeader>
             <CardTitle>Top 5 Laundries by Volume</CardTitle>
             <CardDescription>Last 30 days</CardDescription>
@@ -585,7 +628,7 @@ export function Dashboard() {
                   <XAxis type="number" />
                   <YAxis dataKey="name" type="category" width={120} />
                   <Tooltip />
-                  <Bar dataKey="count" fill="#FF8042" />
+                  <Bar dataKey="count" fill="#059669" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -597,7 +640,7 @@ export function Dashboard() {
         </Card>
 
         {/* Driver Acceptance Rate */}
-        <Card>
+        <Card className="rounded-xl">
           <CardHeader>
             <CardTitle>Driver Acceptance Rate</CardTitle>
             <CardDescription>Last 30 days</CardDescription>
@@ -632,10 +675,10 @@ export function Dashboard() {
             )}
           </CardContent>
         </Card>
-      </div>
+      </motion.div>
 
       {/* Live Map Widget */}
-      <Card>
+      <Card className="rounded-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MapPin className="h-5 w-5" />
@@ -658,7 +701,7 @@ export function Dashboard() {
                       activeDrivers.map((driver) => (
                         <div
                           key={driver.id}
-                          className="flex items-center justify-between p-2 rounded-md border"
+                          className="flex items-center justify-between p-2 rounded-xl border transition-colors hover:bg-muted/50"
                         >
                           <span className="text-sm">{driver.name}</span>
                           <Badge variant="secondary" className="text-xs">
@@ -680,7 +723,7 @@ export function Dashboard() {
                       inProgressDeliveries.map((delivery) => (
                         <div
                           key={delivery.id}
-                          className="flex items-center justify-between p-2 rounded-md border"
+                          className="flex items-center justify-between p-2 rounded-xl border transition-colors hover:bg-muted/50"
                         >
                           <span className="text-sm">Delivery {delivery.id.slice(0, 8)}</span>
                           <Badge variant="outline" className="text-xs">
@@ -694,7 +737,7 @@ export function Dashboard() {
                   </div>
                 </div>
               </div>
-              <div className="rounded-md border bg-muted p-4 text-center text-sm text-muted-foreground">
+              <div className="rounded-xl border bg-muted p-4 text-center text-sm text-muted-foreground">
                 <MapPin className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p>Map visualization will be integrated with Google Maps or Leaflet</p>
                 <p className="text-xs mt-1">
@@ -708,7 +751,7 @@ export function Dashboard() {
       </Card>
 
       {/* Recent Activity Feed */}
-      <Card>
+      <Card className="rounded-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Activity className="h-5 w-5" />
@@ -728,7 +771,7 @@ export function Dashboard() {
               {recentActivity.map((activity, index) => (
                 <div
                   key={index}
-                  className="flex items-start gap-4 p-3 rounded-md border bg-card"
+                  className="flex items-start gap-4 p-3 rounded-xl border bg-card transition-colors hover:bg-muted/30"
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">

@@ -7,13 +7,13 @@ export default function OrdersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Orders & Deliveries</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-2xl font-bold tracking-tight">Orders & Deliveries</h1>
+        <p className="text-sm text-muted-foreground">
           Monitor and manage all orders across the platform
         </p>
       </div>
 
-      <Card>
+      <Card className="rounded-xl">
         <CardHeader>
           <CardTitle>All Orders</CardTitle>
           <CardDescription>
