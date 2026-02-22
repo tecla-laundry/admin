@@ -270,27 +270,13 @@ export function OrderDetailDrawer({
   }
 
   // Redispatch: which leg needs a driver? Closest status between ready_for_delivery and accepted.
-  // Before ready_for_delivery → pickup leg; at/after ready_for_delivery → return leg.
-  const pickupStatuses: OrderStatus[] = [
-    'accepted',
-    'driver_pickup_assigned',
-    'pickup_in_progress',
-    'picked_up',
-    'at_laundry',
-    'washing_in_progress',
-  ]
   const deliveryStatuses: OrderStatus[] = [
     'ready_for_delivery',
     'driver_delivery_assigned',
     'delivery_in_progress',
   ]
-  const redispatchTaskType = order
-    ? pickupStatuses.includes(order.status)
-      ? 'pickup'
-      : deliveryStatuses.includes(order.status)
-        ? 'delivery'
-        : null
-    : null
+  // Re-dispatch only creates delivery (return) requests, never pickup.
+  const redispatchTaskType = order && deliveryStatuses.includes(order.status) ? 'delivery' : null
 
   const handleRedispatchDriver = async () => {
     if (!order || redispatchTaskType === null) {
@@ -768,9 +754,8 @@ export function OrderDetailDrawer({
               <div className="space-y-2">
                 <Label>Re-dispatch Driver</Label>
                 <p className="text-xs text-muted-foreground">
-                  {redispatchTaskType === 'pickup' && 'Requests a driver for the pickup leg (customer → laundry).'}
                   {redispatchTaskType === 'delivery' && 'Requests a driver for the return leg (laundry → customer).'}
-                  {redispatchTaskType === null && 'Current status does not allow re-dispatch.'}
+                  {redispatchTaskType === null && 'Re-dispatch is only available for orders in delivery phase (ready_for_delivery, driver_delivery_assigned, or delivery_in_progress).'}
                 </p>
                 <Button
                   onClick={handleRedispatchDriver}
