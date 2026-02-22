@@ -36,6 +36,7 @@ import {
   FileText,
   RefreshCw,
   AlertCircle,
+  XCircle,
 } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -166,10 +167,13 @@ export function OrderDetailDrawer({
     if (!order) return
 
     try {
-      // Fetch full order details
+      // Fetch full order details with order items (no prices used for total)
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
-        .select('*')
+        .select(`
+          *,
+          order_items(id, service_type, quantity, description)
+        `)
         .eq('id', order.id)
         .single()
 
@@ -265,35 +269,87 @@ export function OrderDetailDrawer({
     }
   }
 
+  // Redispatch: which leg needs a driver? Closest status between ready_for_delivery and accepted.
+  // Before ready_for_delivery → pickup leg; at/after ready_for_delivery → return leg.
+  const pickupStatuses: OrderStatus[] = [
+    'accepted',
+    'driver_pickup_assigned',
+    'pickup_in_progress',
+    'picked_up',
+    'at_laundry',
+    'washing_in_progress',
+  ]
+  const deliveryStatuses: OrderStatus[] = [
+    'ready_for_delivery',
+    'driver_delivery_assigned',
+    'delivery_in_progress',
+  ]
+  const redispatchTaskType =
+    pickupStatuses.includes(order.status) ? 'pickup' : deliveryStatuses.includes(order.status) ? 'delivery' : null
+
   const handleRedispatchDriver = async () => {
-    if (!order) return
+    if (!order || redispatchTaskType === null) {
+      toast.error('Cannot re-dispatch for current order status')
+      return
+    }
 
     setLoading(true)
     try {
       const { data, error } = await invoke('dispatch_driver', {
         body: {
           order_id: order.id,
-          task_type: order.status.includes('pickup') ? 'pickup' : 'delivery',
+          task_type: redispatchTaskType,
         },
       })
 
       if (error) throw error
 
-      // Log to audit
       try {
         await logAdminAudit(supabase, {
           action: 'redispatch_driver',
           targetType: 'order',
           targetId: order.id,
-          details: { delivery_type: order.status.includes('pickup') ? 'pickup' : 'delivery' },
+          details: { task_type: redispatchTaskType },
         })
       } catch {}
 
-      toast.success('Driver re-dispatch initiated')
+      toast.success(`Driver re-dispatch initiated (${redispatchTaskType})`)
       onUpdated?.()
       fetchOrderDetails()
     } catch (error: any) {
       toast.error(error.message || 'Failed to re-dispatch driver')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCancelOrder = async () => {
+    if (!order) return
+    const reason = window.prompt('Reason for cancellation (required):')
+    if (!reason?.trim()) {
+      toast.error('Cancellation reason is required')
+      return
+    }
+    setLoading(true)
+    try {
+      const { error } = await invoke('cancel_order', {
+        body: { order_id: order.id, reason: reason.trim() },
+      })
+      if (error) throw error
+      try {
+        await logAdminAudit(supabase, {
+          action: 'cancel_order',
+          targetType: 'order',
+          targetId: order.id,
+          details: { reason: reason.trim() },
+        })
+      } catch {}
+      toast.success('Order cancelled')
+      onUpdated?.()
+      fetchOrderDetails()
+      onOpenChange(false)
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to cancel order')
     } finally {
       setLoading(false)
     }
@@ -363,13 +419,6 @@ export function OrderDetailDrawer({
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <DollarSign className="h-4 w-4" />
-                    Total Price
-                  </p>
-                  <p className="text-sm font-bold">R{order.total_price.toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                     <Package className="h-4 w-4" />
                     Weight
                   </p>
@@ -385,6 +434,75 @@ export function OrderDetailDrawer({
               </div>
             </CardContent>
           </Card>
+
+          {/* Pricing (same model as customer review) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-4 w-4" />
+                Pricing
+              </CardTitle>
+              <CardDescription>
+                Laundry fee, platform fee, commission, driver delivery for both legs. Total platform earnings = platform fee + commission.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Laundry fee (laundry share)</span>
+                <span>R{Number(order.service_fee ?? 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Commission (from service)</span>
+                <span>R{Number(order.commission_amount ?? 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Platform fee</span>
+                <span>R{Number(order.platform_fee ?? 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Driver delivery fee (pickup leg)</span>
+                <span>R{((Number(order.pickup_fee ?? 0)) / 2).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Driver delivery fee (return leg)</span>
+                <span>R{((Number(order.pickup_fee ?? 0)) / 2).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between pt-2 border-t font-semibold">
+                <span>Total (customer paid)</span>
+                <span>R{Number(order.total_price ?? 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between pt-2 border-t text-primary font-semibold">
+                <span>Platform earnings</span>
+                <span>R{(Number(order.platform_fee ?? 0) + Number(order.commission_amount ?? 0)).toFixed(2)}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Order Items (display only, no prices) */}
+          {orderDetails?.order_items && orderDetails.order_items.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  Order Items
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {orderDetails.order_items.map((item: { id: string; service_type: string; quantity: number; description?: string | null }) => (
+                    <div key={item.id} className="flex justify-between items-start p-2 rounded border text-sm">
+                      <span className="font-medium capitalize">{item.service_type.replace(/_/g, ' ')}</span>
+                      <span className="text-muted-foreground">{item.quantity} kg</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between pt-2 border-t font-semibold text-sm">
+                    <span>Total Weight</span>
+                    <span>{order.total_weight_kg} kg</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Addresses */}
           <Card>
@@ -644,15 +762,33 @@ export function OrderDetailDrawer({
               </div>
               <div className="space-y-2">
                 <Label>Re-dispatch Driver</Label>
+                <p className="text-xs text-muted-foreground">
+                  {redispatchTaskType === 'pickup' && 'Requests a driver for the pickup leg (customer → laundry).'}
+                  {redispatchTaskType === 'delivery' && 'Requests a driver for the return leg (laundry → customer).'}
+                  {redispatchTaskType === null && 'Current status does not allow re-dispatch.'}
+                </p>
                 <Button
                   onClick={handleRedispatchDriver}
-                  disabled={loading}
+                  disabled={loading || redispatchTaskType === null}
                   variant="outline"
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
-                  Re-dispatch Driver
+                  Re-dispatch Driver ({redispatchTaskType ?? '—'})
                 </Button>
               </div>
+              {!['cancelled', 'completed', 'disputed'].includes(order.status) && (
+                <div className="space-y-2 pt-4 border-t">
+                  <Label>Cancel Order</Label>
+                  <Button
+                    onClick={handleCancelOrder}
+                    disabled={loading}
+                    variant="destructive"
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Cancel Order
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
