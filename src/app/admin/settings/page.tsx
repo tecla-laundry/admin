@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { MapPin, Clock, Bell, ToggleLeft } from 'lucide-react'
+import { MapPin, Clock, Bell, ToggleLeft, Banknote } from 'lucide-react'
 
 type PlatformSetting = {
   key: string
@@ -96,6 +96,11 @@ export default function SettingsPage() {
   const [driverModelEnabled, setDriverModelEnabled] = useState(true)
   const [autoDispatchEnabled, setAutoDispatchEnabled] = useState(true)
 
+  // Pricing (commission %, platform fee R, delivery R/km)
+  const [commissionRateDefault, setCommissionRateDefault] = useState('0.15')
+  const [platformFeeDefault, setPlatformFeeDefault] = useState('15')
+  const [deliveryFeePerKm, setDeliveryFeePerKm] = useState('7')
+
   const [saving, setSaving] = useState<string | null>(null)
 
   // Load coverage settings
@@ -121,6 +126,22 @@ export default function SettingsPage() {
       if (maxDistance?.value) setMaxDriverDistance(String(maxDistance.value))
       if (matchingRadius?.value) setDriverMatchingRadius(String(matchingRadius.value))
       return { timeout, maxDistance, matchingRadius }
+    },
+  })
+
+  // Load pricing settings
+  useQuery({
+    queryKey: ['settings', 'pricing'],
+    queryFn: async () => {
+      const [commission, platformFee, deliveryPerKm] = await Promise.all([
+        getPlatformSetting(supabase, 'commission_rate_default'),
+        getPlatformSetting(supabase, 'platform_fee_default'),
+        getPlatformSetting(supabase, 'delivery_fee_per_km'),
+      ])
+      if (commission?.value != null) setCommissionRateDefault(String(commission.value))
+      if (platformFee?.value != null) setPlatformFeeDefault(String(platformFee.value))
+      if (deliveryPerKm?.value != null) setDeliveryFeePerKm(String(deliveryPerKm.value))
+      return { commission, platformFee, deliveryPerKm }
     },
   })
 
@@ -216,6 +237,29 @@ export default function SettingsPage() {
     })
   }
 
+  const handleSavePricing = () => {
+    const rate = Number(commissionRateDefault)
+    const fee = Number(platformFeeDefault)
+    const perKm = Number(deliveryFeePerKm)
+    if (!Number.isFinite(rate) || rate < 0 || rate > 1) {
+      toast.error('Commission rate must be between 0 and 1 (e.g. 0.15 for 15%)')
+      return
+    }
+    if (!Number.isFinite(fee) || fee < 0 || !Number.isFinite(perKm) || perKm < 0) {
+      toast.error('Platform fee and delivery fee per km must be non-negative numbers')
+      return
+    }
+    setSaving('pricing')
+    saveMutation.mutate({
+      category: 'pricing',
+      data: {
+        commission_rate_default: rate,
+        platform_fee_default: fee,
+        delivery_fee_per_km: perKm,
+      },
+    })
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -229,6 +273,7 @@ export default function SettingsPage() {
         <TabsList>
           <TabsTrigger value="coverage">Coverage Areas</TabsTrigger>
           <TabsTrigger value="dispatch">Dispatch Settings</TabsTrigger>
+          <TabsTrigger value="pricing">Pricing</TabsTrigger>
           <TabsTrigger value="notifications">Notification Templates</TabsTrigger>
           <TabsTrigger value="features">Feature Flags</TabsTrigger>
         </TabsList>
@@ -354,6 +399,72 @@ export default function SettingsPage() {
               </Button>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="pricing" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Banknote className="h-5 w-5" />
+                Pricing &amp; Fees
+              </CardTitle>
+              <CardDescription>
+                Platform commission (from service fee), fixed platform fee, and delivery fee per km. Used when creating orders.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="commission-rate">Commission rate (0–1)</Label>
+                <Input
+                  id="commission-rate"
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={commissionRateDefault}
+                  onChange={(e) => setCommissionRateDefault(e.target.value)}
+                  placeholder="0.15"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Platform commission as decimal (e.g. 0.15 = 15%). Taken from the laundry service fee. Default 15%.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="platform-fee">Platform fee (ZAR)</Label>
+                <Input
+                  id="platform-fee"
+                  type="number"
+                  min="0"
+                  value={platformFeeDefault}
+                  onChange={(e) => setPlatformFeeDefault(e.target.value)}
+                  placeholder="15"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Fixed fee paid to the platform per order (unchanging).
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="delivery-fee-per-km">Delivery fee per km (ZAR)</Label>
+                <Input
+                  id="delivery-fee-per-km"
+                  type="number"
+                  min="0"
+                  value={deliveryFeePerKm}
+                  onChange={(e) => setDeliveryFeePerKm(e.target.value)}
+                  placeholder="7"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Total delivery fee = this × (customer–laundry distance km) × 2 (pickup + return). Each driver gets half.
+                </p>
+              </div>
+              <Button
+                onClick={handleSavePricing}
+                disabled={saving === 'pricing'}
+              >
+                {saving === 'pricing' ? 'Saving...' : 'Save Pricing'}
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-4">
