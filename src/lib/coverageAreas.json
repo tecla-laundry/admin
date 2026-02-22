@@ -1,57 +1,36 @@
 [
-  {
-    "name": "Randburg",
-    "center": { "lat": -26.0965, "lng": 28.0132 },
-    "radius": 10
-  },
-  {
-    "name": "Bryanston",
-    "center": { "lat": -26.0519, "lng": 28.0236 },
-    "radius": 8
-  },
-  {
-    "name": "Sandton",
-    "center": { "lat": -26.1075, "lng": 28.0567 },
-    "radius": 10
-  },
-  {
-    "name": "Fourways",
-    "center": { "lat": -26.0183, "lng": 28.0067 },
-    "radius": 9
-  },
-  {
-    "name": "Sunninghill",
-    "center": { "lat": -26.0431, "lng": 28.0864 },
-    "radius": 7
-  },
-  {
-    "name": "Rivonia",
-    "center": { "lat": -26.0603, "lng": 28.0611 },
-    "radius": 6
-  },
-  {
-    "name": "Woodmead",
-    "center": { "lat": -26.0667, "lng": 28.1069 },
-    "radius": 7
-  },
-  {
-    "name": "Rosebank",
-    "center": { "lat": -26.1453, "lng": 28.0411 },
-    "radius": 5
-  },
-  {
-    "name": "Hyde Park / Melrose",
-    "center": { "lat": -26.1308, "lng": 28.0369 },
-    "radius": 5
-  },
-  {
-    "name": "Northriding / Northgate",
-    "center": { "lat": -26.0667, "lng": 28.0 },
-    "radius": 8
-  },
-  {
-    "name": "Midrand (partial)",
-    "center": { "lat": -25.9636, "lng": 28.1369 },
-    "radius": 12
-  }
+  {"name":"Randburg","center":{"lat":-26.0965,"lng":28.0132},"radius":10},
+  {"name":"Bryanston","center":{"lat":-26.0519,"lng":28.0236},"radius":8},
+  {"name":"Sandton","center":{"lat":-26.1075,"lng":28.0567},"radius":10},
+  {"name":"Fourways","center":{"lat":-26.0183,"lng":28.0067},"radius":9},
+  {"name":"Sunninghill","center":{"lat":-26.0431,"lng":28.0864},"radius":7},
+  {"name":"Rivonia","center":{"lat":-26.0603,"lng":28.0611},"radius":6},
+  {"name":"Woodmead","center":{"lat":-26.0667,"lng":28.1069},"radius":7},
+  {"name":"Rosebank","center":{"lat":-26.1453,"lng":28.0411},"radius":5},
+  {"name":"Hyde Park / Melrose","center":{"lat":-26.1308,"lng":28.0369},"radius":5},
+  {"name":"Northriding / Northgate","center":{"lat":-26.0667,"lng":28},"radius":8},
+  {"name":"Midrand (partial)","center":{"lat":-25.9636,"lng":28.1369},"radius":12},
+  {"name":"Bedfordview","center":{"lat":-26.1833,"lng":28.2333},"radius":6},
+  {"name":"Boksburg","center":{"lat":-26.2119,"lng":28.2594},"radius":8},
+  {"name":"Centurion","center":{"lat":-25.8606,"lng":28.1853},"radius":10},
+  {"name":"Edenvale","center":{"lat":-26.1406,"lng":28.1522},"radius":6},
+  {"name":"Germiston","center":{"lat":-26.2208,"lng":28.1678},"radius":8},
+  {"name":"Johannesburg CBD","center":{"lat":-26.2041,"lng":28.0473},"radius":8},
+  {"name":"Kempton Park","center":{"lat":-26.1083,"lng":28.2472},"radius":8},
+  {"name":"Linden","center":{"lat":-26.1333,"lng":27.9833},"radius":5},
+  {"name":"Norwood","center":{"lat":-26.1333,"lng":28.0667},"radius":5},
+  {"name":"Parkhurst","center":{"lat":-26.1333,"lng":28.0333},"radius":4},
+  {"name":"Roodepoort","center":{"lat":-26.1625,"lng":27.8722},"radius":10},
+  {"name":"Pretoria (partial)","center":{"lat":-25.7479,"lng":28.2293},"radius":12},
+  {"name":"Benoni","center":{"lat":-26.1885,"lng":28.3206},"radius":8},
+  {"name":"Alberton","center":{"lat":-26.2678,"lng":28.1222},"radius":7},
+  {"name":"Krugersdorp","center":{"lat":-26.1000,"lng":27.7667},"radius":9},
+  {"name":"Brakpan","center":{"lat":-26.2367,"lng":28.3694},"radius":7},
+  {"name":"Springs","center":{"lat":-26.2500,"lng":28.4500},"radius":8},
+  {"name":"Sandhurst","center":{"lat":-26.1089,"lng":28.0511},"radius":5},
+  {"name":"Craighall Park","center":{"lat":-26.1286,"lng":28.0311},"radius":4},
+  {"name":"Melrose North","center":{"lat":-26.1267,"lng":28.0589},"radius":4},
+  {"name":"Illovo","center":{"lat":-26.1311,"lng":28.0583},"radius":4},
+  {"name":"Morningside","center":{"lat":-26.1189,"lng":28.0733},"radius":5},
+  {"name":"Waverley","center":{"lat":-26.1333,"lng":28.0833},"radius":5}
 ]

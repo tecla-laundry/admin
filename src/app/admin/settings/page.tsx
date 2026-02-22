@@ -1,26 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/contexts/auth-context'
 import { logAdminAudit } from '@/lib/admin-audit'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { MapPin, Clock, Bell, ToggleLeft, Banknote } from 'lucide-react'
+import { MapPin, Clock, Banknote } from 'lucide-react'
+import predefinedCoverageAreas from '@/lib/coverageAreas.json'
+
+type CoverageArea = { name: string; center: { lat: number; lng: number }; radius: number }
 
 type PlatformSetting = {
   key: string
@@ -67,34 +60,18 @@ async function upsertPlatformSetting(
   if (error) throw error
 }
 
-async function fetchNotificationTemplates(
-  supabase: ReturnType<typeof import('@/lib/supabase/client').createClient>
-) {
-  const { data, error } = await supabase
-    .from('notification_templates')
-    .select('*')
-    .order('template_key', { ascending: true })
-
-  if (error) throw error
-  return data || []
-}
-
 export default function SettingsPage() {
   const { supabase } = useAuth()
   const queryClient = useQueryClient()
 
-  // Coverage Areas
+  // Coverage Areas: selected area names (from predefined list)
   const [defaultRadius, setDefaultRadius] = useState('15')
-  const [coverageAreas, setCoverageAreas] = useState('')
+  const [selectedCoverageNames, setSelectedCoverageNames] = useState<Set<string>>(new Set())
 
   // Dispatch Settings
   const [dispatchTimeout, setDispatchTimeout] = useState('180')
   const [maxDriverDistance, setMaxDriverDistance] = useState('12')
   const [driverMatchingRadius, setDriverMatchingRadius] = useState('10')
-
-  // Feature Flags
-  const [driverModelEnabled, setDriverModelEnabled] = useState(true)
-  const [autoDispatchEnabled, setAutoDispatchEnabled] = useState(true)
 
   // Pricing (commission %, platform fee R, delivery R/km)
   const [commissionRateDefault, setCommissionRateDefault] = useState('0.15')
@@ -110,7 +87,10 @@ export default function SettingsPage() {
       const radius = await getPlatformSetting(supabase, 'coverage_default_radius_km')
       const areas = await getPlatformSetting(supabase, 'coverage_areas')
       if (radius?.value) setDefaultRadius(String(radius.value))
-      if (areas?.value) setCoverageAreas(JSON.stringify(areas.value, null, 2))
+      if (areas?.value && Array.isArray(areas.value)) {
+        const names = (areas.value as CoverageArea[]).map((a) => a.name)
+        setSelectedCoverageNames(new Set(names))
+      }
       return { radius, areas }
     },
   })
@@ -145,24 +125,6 @@ export default function SettingsPage() {
     },
   })
 
-  // Load feature flags
-  useQuery({
-    queryKey: ['settings', 'feature-flags'],
-    queryFn: async () => {
-      const driverModel = await getPlatformSetting(supabase, 'feature_driver_model_enabled')
-      const autoDispatch = await getPlatformSetting(supabase, 'feature_auto_dispatch_enabled')
-      if (driverModel?.value !== undefined) setDriverModelEnabled(Boolean(driverModel.value))
-      if (autoDispatch?.value !== undefined) setAutoDispatchEnabled(Boolean(autoDispatch.value))
-      return { driverModel, autoDispatch }
-    },
-  })
-
-  // Load notification templates
-  const { data: templates = [], isLoading: templatesLoading } = useQuery({
-    queryKey: ['settings', 'notification-templates'],
-    queryFn: () => fetchNotificationTemplates(supabase),
-  })
-
   const saveMutation = useMutation({
     mutationFn: async ({
       category,
@@ -194,25 +156,36 @@ export default function SettingsPage() {
 
   const handleSaveCoverage = () => {
     setSaving('coverage')
-    let areasValue: any = null
-    try {
-      if (coverageAreas.trim()) {
-        areasValue = JSON.parse(coverageAreas)
-      }
-    } catch (e) {
-      toast.error('Invalid JSON format for coverage areas')
-      setSaving(null)
-      return
-    }
-
+    const areasValue: CoverageArea[] = predefinedCoverageAreas.filter((a) =>
+      selectedCoverageNames.has(a.name)
+    )
     saveMutation.mutate({
       category: 'coverage',
       data: {
         coverage_default_radius_km: Number(defaultRadius),
-        coverage_areas: areasValue,
+        coverage_areas: areasValue.length ? areasValue : null,
       },
     })
   }
+
+  const toggleCoverageArea = (name: string) => {
+    setSelectedCoverageNames((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
+
+  const selectAllCoverage = () => {
+    setSelectedCoverageNames(new Set(predefinedCoverageAreas.map((a) => a.name)))
+  }
+
+  const deselectAllCoverage = () => {
+    setSelectedCoverageNames(new Set())
+  }
+
+  const predefinedList = useMemo(() => predefinedCoverageAreas as CoverageArea[], [])
 
   const handleSaveDispatch = () => {
     setSaving('dispatch')
@@ -222,17 +195,6 @@ export default function SettingsPage() {
         dispatch_timeout_seconds: Number(dispatchTimeout),
         dispatch_max_driver_distance_km: Number(maxDriverDistance),
         dispatch_matching_radius_km: Number(driverMatchingRadius),
-      },
-    })
-  }
-
-  const handleSaveFeatureFlags = () => {
-    setSaving('feature-flags')
-    saveMutation.mutate({
-      category: 'feature-flags',
-      data: {
-        feature_driver_model_enabled: driverModelEnabled,
-        feature_auto_dispatch_enabled: autoDispatchEnabled,
       },
     })
   }
@@ -265,7 +227,7 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Platform Settings</h1>
         <p className="text-muted-foreground">
-          Configure platform-wide settings and feature flags
+          Configure platform-wide settings
         </p>
       </div>
 
@@ -274,8 +236,6 @@ export default function SettingsPage() {
           <TabsTrigger value="coverage">Coverage Areas</TabsTrigger>
           <TabsTrigger value="dispatch">Dispatch Settings</TabsTrigger>
           <TabsTrigger value="pricing">Pricing</TabsTrigger>
-          <TabsTrigger value="notifications">Notification Templates</TabsTrigger>
-          <TabsTrigger value="features">Feature Flags</TabsTrigger>
         </TabsList>
 
         <TabsContent value="coverage" className="space-y-4">
@@ -307,18 +267,37 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="coverage-areas">Coverage Areas (JSON)</Label>
-                <Textarea
-                  id="coverage-areas"
-                  value={coverageAreas}
-                  onChange={(e) => setCoverageAreas(e.target.value)}
-                  placeholder='[{"name": "Randburg", "center": {"lat": -26.0965, "lng": 28.0132}, "radius": 10}, {"name": "Bryanston", "center": {"lat": -26.0519, "lng": 28.0236}, "radius": 8}]'
-                  className="font-mono text-sm"
-                  rows={8}
-                />
+                <Label>Coverage Areas</Label>
                 <p className="text-xs text-muted-foreground">
-                  Define specific coverage areas with center coordinates and radius. Leave empty to use default radius everywhere.
+                  Select which areas are in scope. Default radius above applies where no area-specific radius is set.
                 </p>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={selectAllCoverage}>
+                    Select all
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={deselectAllCoverage}>
+                    Deselect all
+                  </Button>
+                </div>
+                <div className="border rounded-md p-3 max-h-[280px] overflow-y-auto space-y-2">
+                  {predefinedList.map((area) => (
+                    <label
+                      key={area.name}
+                      className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded px-2 py-1"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedCoverageNames.has(area.name)}
+                        onChange={() => toggleCoverageArea(area.name)}
+                        className="rounded border-input"
+                      />
+                      <span className="text-sm">
+                        {area.name}
+                        <span className="text-muted-foreground ml-1">({area.radius} km)</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               <Button
@@ -465,115 +444,6 @@ export default function SettingsPage() {
               </Button>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="notifications" className="space-y-4">
-      <Card>
-        <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bell className="h-5 w-5" />
-                Notification Templates
-              </CardTitle>
-          <CardDescription>
-                Manage email and SMS notification templates used across the platform
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-              {templatesLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading templates...</div>
-              ) : templates.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No notification templates found
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Template Key</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Channels</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {templates.map((template) => (
-                      <TableRow key={template.id}>
-                        <TableCell className="font-mono text-xs">{template.template_key}</TableCell>
-                        <TableCell>{template.type}</TableCell>
-                        <TableCell className="max-w-xs truncate">
-                          {template.title_template}
-                        </TableCell>
-                        <TableCell>
-                          {template.default_channels?.join(', ') || 'None'}
-                        </TableCell>
-                        <TableCell>
-                          {template.is_active ? (
-                            <span className="text-green-600">Active</span>
-                          ) : (
-                            <span className="text-gray-400">Inactive</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-              <p className="text-sm text-muted-foreground mt-4">
-                Template editing functionality will be available in a future update
-          </p>
-        </CardContent>
-      </Card>
-        </TabsContent>
-
-        <TabsContent value="features" className="space-y-4">
-      <Card>
-        <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ToggleLeft className="h-5 w-5" />
-                Feature Flags
-              </CardTitle>
-          <CardDescription>
-                Enable or disable platform features globally
-          </CardDescription>
-        </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="driver-model">Independent Driver Model</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Enable the independent driver network for pickup and delivery services
-                  </p>
-                </div>
-                <Switch
-                  id="driver-model"
-                  checked={driverModelEnabled}
-                  onCheckedChange={setDriverModelEnabled}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="auto-dispatch">Auto Dispatch</Label>
-          <p className="text-sm text-muted-foreground">
-                    Automatically dispatch drivers when orders are ready for pickup or delivery
-                  </p>
-                </div>
-                <Switch
-                  id="auto-dispatch"
-                  checked={autoDispatchEnabled}
-                  onCheckedChange={setAutoDispatchEnabled}
-                />
-              </div>
-
-              <Button
-                onClick={handleSaveFeatureFlags}
-                disabled={saving === 'feature-flags'}
-              >
-                {saving === 'feature-flags' ? 'Saving...' : 'Save Feature Flags'}
-              </Button>
-        </CardContent>
-      </Card>
         </TabsContent>
       </Tabs>
     </div>
