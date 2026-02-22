@@ -65,20 +65,63 @@ async function fetchPayoutsAndEscrow(
 
   let pendingLaundry = 0
   let pendingDrivers = 0
+  let pendingPlatform = 0
   for (const p of payouts || []) {
     const amt = Number((p as any).amount || 0)
     if ((p as any).recipient_type === 'laundry') pendingLaundry += amt
     if ((p as any).recipient_type === 'driver') pendingDrivers += amt
+    if ((p as any).recipient_type === 'platform') pendingPlatform += amt
   }
 
   let escrowHeld = 0
   for (const pay of escrow || []) {
     const amt = Number((pay as any).amount || 0)
-    // If payment failed, it shouldn't be considered escrow; keep best-effort.
     if ((pay as any).status !== 'failed') escrowHeld += amt
   }
 
-  return { pendingLaundry, pendingDrivers, escrowHeld }
+  return { pendingLaundry, pendingDrivers, pendingPlatform, escrowHeld }
+}
+
+type EarningRow = {
+  id: string
+  order_id: string
+  recipient_type: string
+  recipient_id: string | null
+  amount: number
+  paid: boolean
+  paid_at: string | null
+  created_at: string
+  description: string | null
+}
+
+async function fetchEarnings(
+  supabase: ReturnType<typeof import('@/lib/supabase/client').createClient>,
+  opts: { dateFrom?: string; dateTo?: string; recipientType?: string; paid?: boolean }
+) {
+  let q = supabase
+    .from('earnings')
+    .select('id,order_id,recipient_type,recipient_id,amount,paid,paid_at,created_at,description')
+    .order('created_at', { ascending: false })
+    .limit(500)
+  if (opts.dateFrom) q = q.gte('created_at', new Date(`${opts.dateFrom}T00:00:00.000Z`).toISOString())
+  if (opts.dateTo) q = q.lte('created_at', new Date(`${opts.dateTo}T23:59:59.999Z`).toISOString())
+  if (opts.recipientType) q = q.eq('recipient_type', opts.recipientType)
+  if (opts.paid !== undefined) q = q.eq('paid', opts.paid)
+  const { data, error } = await q
+  if (error) throw error
+  return (data || []) as EarningRow[]
+}
+
+async function fetchPayoutsList(
+  supabase: ReturnType<typeof import('@/lib/supabase/client').createClient>
+) {
+  const { data, error } = await supabase
+    .from('payouts')
+    .select('id,recipient_type,recipient_id,amount,status,period_start,period_end,processed_at,created_at')
+    .order('created_at', { ascending: false })
+    .limit(100)
+  if (error) throw error
+  return (data || []) as any[]
 }
 
 async function fetchPayments(
@@ -136,12 +179,44 @@ export function FinanceDashboard() {
   const [periodStart, setPeriodStart] = useState<string>('')
   const [periodEnd, setPeriodEnd] = useState<string>('')
   const [processingPayouts, setProcessingPayouts] = useState(false)
+  const [markingPaidId, setMarkingPaidId] = useState<string | null>(null)
   const { data: payoutSummary, isLoading: loadingPayoutSummary, refetch: refetchPayoutSummary } = useQuery({
     queryKey: ['finance', 'payout-summary'],
     queryFn: () => fetchPayoutsAndEscrow(supabase),
   })
+  const { data: payoutsList, isLoading: loadingPayoutsList, refetch: refetchPayoutsList } = useQuery({
+    queryKey: ['finance', 'payouts-list'],
+    queryFn: () => fetchPayoutsList(supabase),
+  })
 
-  // Earnings + payments
+  // Earnings (from earnings table)
+  const [earningsFrom, setEarningsFrom] = useState<string>('')
+  const [earningsTo, setEarningsTo] = useState<string>('')
+  const [earningsRecipientType, setEarningsRecipientType] = useState<string>('')
+  const [earningsPaidFilter, setEarningsPaidFilter] = useState<'all' | 'paid' | 'unpaid'>('all')
+  const { data: earnings, isLoading: loadingEarnings, refetch: refetchEarnings } = useQuery({
+    queryKey: ['finance', 'earnings', earningsFrom, earningsTo, earningsRecipientType, earningsPaidFilter],
+    queryFn: () =>
+      fetchEarnings(supabase, {
+        dateFrom: earningsFrom || undefined,
+        dateTo: earningsTo || undefined,
+        recipientType: earningsRecipientType || undefined,
+        paid: earningsPaidFilter === 'all' ? undefined : earningsPaidFilter === 'paid',
+      }),
+  })
+
+  const earningsTotals = useMemo(() => {
+    const t = { platform: 0, laundry: 0, driver: 0 }
+    for (const e of earnings || []) {
+      const amt = Number(e.amount || 0)
+      if (e.recipient_type === 'platform') t.platform += amt
+      if (e.recipient_type === 'laundry') t.laundry += amt
+      if (e.recipient_type === 'driver') t.driver += amt
+    }
+    return t
+  }, [earnings])
+
+  // Payments (customer payments)
   const [paymentsFrom, setPaymentsFrom] = useState<string>('')
   const [paymentsTo, setPaymentsTo] = useState<string>('')
   const { data: payments, isLoading: loadingPayments, refetch: refetchPayments } = useQuery({
@@ -258,13 +333,30 @@ export function FinanceDashboard() {
         details: { period_start: periodStart, period_end: periodEnd, result: data ?? null },
       })
 
-      toast.success('Payout processing started')
+      toast.success('Payouts processed from earnings')
       refetchPayoutSummary()
-      refetchPayments()
+      refetchPayoutsList()
+      refetchEarnings()
     } catch (e: any) {
       toast.error(e?.message || 'Failed to process payouts')
     } finally {
       setProcessingPayouts(false)
+    }
+  }
+
+  const markPayoutPaid = async (payoutId: string) => {
+    setMarkingPaidId(payoutId)
+    try {
+      const { error } = await invoke('mark_payout_paid', { body: { payout_id: payoutId } })
+      if (error) throw error
+      toast.success('Payout marked as paid')
+      refetchPayoutSummary()
+      refetchPayoutsList()
+      refetchEarnings()
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to mark payout as paid')
+    } finally {
+      setMarkingPaidId(null)
     }
   }
 
@@ -360,7 +452,7 @@ export function FinanceDashboard() {
             {loadingPayoutSummary ? (
               <div className="text-sm text-muted-foreground">Loading…</div>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-4">
                 <div className="rounded-md border p-3">
                   <div className="text-xs text-muted-foreground">Pending laundries</div>
                   <div className="text-lg font-semibold">R{(payoutSummary?.pendingLaundry || 0).toFixed(2)}</div>
@@ -368,6 +460,10 @@ export function FinanceDashboard() {
                 <div className="rounded-md border p-3">
                   <div className="text-xs text-muted-foreground">Pending drivers</div>
                   <div className="text-lg font-semibold">R{(payoutSummary?.pendingDrivers || 0).toFixed(2)}</div>
+                </div>
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-muted-foreground">Pending platform</div>
+                  <div className="text-lg font-semibold">R{(payoutSummary?.pendingPlatform || 0).toFixed(2)}</div>
                 </div>
                 <div className="rounded-md border p-3">
                   <div className="text-xs text-muted-foreground">Escrow held</div>
@@ -391,16 +487,185 @@ export function FinanceDashboard() {
               {processingPayouts ? 'Processing…' : 'Process Weekly Payouts'}
             </Button>
             <p className="text-xs text-muted-foreground">
-              Processes weekly payouts for all partners and drivers
+              Aggregates unpaid earnings in the period and creates one payout per recipient (platform, laundry, driver).
             </p>
           </CardContent>
         </Card>
       </div>
 
+      {/* Payouts list + Mark as paid */}
       <Card>
         <CardHeader>
-          <CardTitle>Earnings Reports</CardTitle>
-          <CardDescription>View detailed earnings breakdown showing how revenue is distributed between partners, drivers, and the platform</CardDescription>
+          <CardTitle>Payouts</CardTitle>
+          <CardDescription>All payouts; mark as paid when the transfer is done.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingPayoutsList ? (
+            <div className="text-sm text-muted-foreground py-4">Loading…</div>
+          ) : !payoutsList?.length ? (
+            <div className="text-sm text-muted-foreground py-4">No payouts.</div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Recipient</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="w-[120px]">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payoutsList.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="text-xs">
+                        {p.period_start && p.period_end ? `${p.period_start} – ${p.period_end}` : '—'}
+                      </TableCell>
+                      <TableCell>
+                        <span className="capitalize">{p.recipient_type}</span>
+                        {p.recipient_id && (
+                          <span className="ml-1 font-mono text-xs text-muted-foreground">
+                            {String(p.recipient_id).slice(0, 8)}…
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">R{Number(p.amount || 0).toFixed(2)}</TableCell>
+                      <TableCell>
+                        <Badge variant={p.status === 'completed' ? 'default' : 'secondary'}>{p.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {p.created_at ? new Date(p.created_at).toLocaleDateString() : '—'}
+                      </TableCell>
+                      <TableCell>
+                        {p.status === 'pending' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={markingPaidId === p.id}
+                            onClick={() => markPayoutPaid(p.id)}
+                          >
+                            {markingPaidId === p.id ? '…' : 'Mark as paid'}
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Earnings (from earnings table) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Earnings</CardTitle>
+          <CardDescription>Earnings created at status changes (driver per delivery, platform/laundry on order completion). Source for payouts.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-3 flex-wrap items-end">
+            <div className="space-y-2">
+              <Label>From</Label>
+              <Input type="date" value={earningsFrom} onChange={(e) => setEarningsFrom(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>To</Label>
+              <Input type="date" value={earningsTo} onChange={(e) => setEarningsTo(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <select
+                className="flex h-9 w-[120px] rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                value={earningsRecipientType}
+                onChange={(e) => setEarningsRecipientType(e.target.value)}
+              >
+                <option value="">All</option>
+                <option value="platform">Platform</option>
+                <option value="laundry">Laundry</option>
+                <option value="driver">Driver</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Paid</Label>
+              <select
+                className="flex h-9 w-[100px] rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                value={earningsPaidFilter}
+                onChange={(e) => setEarningsPaidFilter(e.target.value as 'all' | 'paid' | 'unpaid')}
+              >
+                <option value="all">All</option>
+                <option value="paid">Paid</option>
+                <option value="unpaid">Unpaid</option>
+              </select>
+            </div>
+            <Button variant="outline" onClick={() => refetchEarnings()} disabled={loadingEarnings}>
+              Refresh
+            </Button>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground">Platform (filtered)</div>
+              <div className="font-semibold">R{earningsTotals.platform.toFixed(2)}</div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground">Laundry (filtered)</div>
+              <div className="font-semibold">R{earningsTotals.laundry.toFixed(2)}</div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground">Driver (filtered)</div>
+              <div className="font-semibold">R{earningsTotals.driver.toFixed(2)}</div>
+            </div>
+          </div>
+
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Recipient</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Paid</TableHead>
+                  <TableHead>Paid at</TableHead>
+                  <TableHead>Created</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loadingEarnings ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">Loading…</TableCell>
+                  </TableRow>
+                ) : (earnings || []).length ? (
+                  (earnings || []).slice(0, 100).map((e) => (
+                    <TableRow key={e.id}>
+                      <TableCell className="font-mono text-xs">{String(e.order_id).slice(0, 8)}…</TableCell>
+                      <TableCell className="capitalize">{e.recipient_type}</TableCell>
+                      <TableCell className="font-mono text-xs">{e.recipient_id ? String(e.recipient_id).slice(0, 8) + '…' : '—'}</TableCell>
+                      <TableCell>R{Number(e.amount || 0).toFixed(2)}</TableCell>
+                      <TableCell><Badge variant={e.paid ? 'default' : 'secondary'}>{e.paid ? 'Paid' : 'Unpaid'}</Badge></TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{e.paid_at ? new Date(e.paid_at).toLocaleDateString() : '—'}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">No earnings found.</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <p className="text-xs text-muted-foreground">Up to 500 earnings (use filters).</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Payments (customer)</CardTitle>
+          <CardDescription>Customer payments per order. Earnings (above) are the source for payouts.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-3 flex-wrap items-end">
