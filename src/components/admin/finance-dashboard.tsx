@@ -13,6 +13,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 type PlatformSettingRow = { key: string; value: any; updated_at?: string | null }
 
@@ -127,11 +133,98 @@ async function fetchPayoutsList(
 ) {
   const { data, error } = await supabase
     .from('payouts')
-    .select('id,recipient_type,recipient_id,amount,status,period_start,period_end,processed_at,created_at')
+    .select('id,recipient_type,recipient_id,amount,status,period_start,period_end,bank_account_details,processed_at,created_at')
     .order('created_at', { ascending: false })
     .limit(100)
   if (error) throw error
   return (data || []) as any[]
+}
+
+type PayoutDetails = {
+  payout: {
+    id: string
+    recipient_type: string
+    recipient_id: string | null
+    amount: number
+    status: string
+    period_start: string | null
+    period_end: string | null
+    bank_account_details: Record<string, unknown> | null
+    created_at: string
+    processed_at: string | null
+  }
+  earnings: Array<{ id: string; order_id: string; amount: number; description: string | null; created_at: string }>
+  recipient:
+    | { type: 'laundry'; business_name: string; physical_address: string | null; phone: string | null; bank_details: Record<string, unknown> | null }
+    | { type: 'driver'; full_name: string | null; email: string | null; phone: string | null; bank_details: Record<string, unknown> | null }
+    | { type: 'platform' }
+    | null
+}
+
+async function fetchPayoutDetails(
+  supabase: ReturnType<typeof import('@/lib/supabase/client').createClient>,
+  payoutId: string
+): Promise<PayoutDetails | null> {
+  const { data: payout, error: payoutErr } = await supabase
+    .from('payouts')
+    .select('id,recipient_type,recipient_id,amount,status,period_start,period_end,bank_account_details,processed_at,created_at')
+    .eq('id', payoutId)
+    .single()
+  if (payoutErr || !payout) return null
+
+  const { data: earnings, error: earningsErr } = await supabase
+    .from('earnings')
+    .select('id,order_id,amount,description,created_at')
+    .eq('payout_id', payoutId)
+    .order('created_at', { ascending: false })
+  if (earningsErr) return { payout: payout as PayoutDetails['payout'], earnings: (earnings || []) as PayoutDetails['earnings'], recipient: null }
+
+  let recipient: PayoutDetails['recipient'] = null
+  const p = payout as { recipient_type: string; recipient_id: string | null }
+  if (p.recipient_type === 'laundry' && p.recipient_id) {
+    const { data: laundry } = await supabase
+      .from('laundries')
+      .select('business_name,physical_address,phone,bank_details')
+      .eq('id', p.recipient_id)
+      .single()
+    if (laundry) {
+      recipient = {
+        type: 'laundry',
+        business_name: (laundry as any).business_name ?? '',
+        physical_address: (laundry as any).physical_address ?? null,
+        phone: (laundry as any).phone ?? null,
+        bank_details: (laundry as any).bank_details ?? null,
+      }
+    }
+  } else if (p.recipient_type === 'driver' && p.recipient_id) {
+    const { data: driver } = await supabase
+      .from('drivers')
+      .select('user_id,bank_details')
+      .eq('id', p.recipient_id)
+      .single()
+    if (driver?.user_id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name,email,phone')
+        .eq('id', (driver as any).user_id)
+        .single()
+      recipient = {
+        type: 'driver',
+        full_name: (profile as any)?.full_name ?? null,
+        email: (profile as any)?.email ?? null,
+        phone: (profile as any)?.phone ?? null,
+        bank_details: (driver as any).bank_details ?? null,
+      }
+    }
+  } else if (p.recipient_type === 'platform') {
+    recipient = { type: 'platform' }
+  }
+
+  return {
+    payout: payout as PayoutDetails['payout'],
+    earnings: (earnings || []) as PayoutDetails['earnings'],
+    recipient,
+  }
 }
 
 async function fetchPayments(
@@ -181,6 +274,7 @@ export function FinanceDashboard() {
   const [periodEnd, setPeriodEnd] = useState<string>('')
   const [processingPayouts, setProcessingPayouts] = useState(false)
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null)
+  const [selectedPayoutId, setSelectedPayoutId] = useState<string | null>(null)
   const { data: payoutSummary, isLoading: loadingPayoutSummary, refetch: refetchPayoutSummary } = useQuery({
     queryKey: ['finance', 'payout-summary'],
     queryFn: () => fetchPayoutsAndEscrow(supabase),
@@ -188,6 +282,11 @@ export function FinanceDashboard() {
   const { data: payoutsList, isLoading: loadingPayoutsList, refetch: refetchPayoutsList } = useQuery({
     queryKey: ['finance', 'payouts-list'],
     queryFn: () => fetchPayoutsList(supabase),
+  })
+  const { data: payoutDetails, isLoading: loadingPayoutDetails } = useQuery({
+    queryKey: ['finance', 'payout-details', selectedPayoutId],
+    queryFn: () => fetchPayoutDetails(supabase, selectedPayoutId!),
+    enabled: !!selectedPayoutId,
   })
 
   // Earnings (from earnings table)
@@ -484,7 +583,7 @@ export function FinanceDashboard() {
                     <TableHead>Amount</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Created</TableHead>
-                    <TableHead className="w-[120px]">Action</TableHead>
+                    <TableHead className="w-[200px]">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -509,16 +608,25 @@ export function FinanceDashboard() {
                         {p.created_at ? new Date(p.created_at).toLocaleDateString() : '—'}
                       </TableCell>
                       <TableCell>
-                        {p.status === 'pending' && (
+                        <div className="flex items-center gap-2">
                           <Button
                             size="sm"
-                            variant="outline"
-                            disabled={markingPaidId === p.id}
-                            onClick={() => markPayoutPaid(p.id)}
+                            variant="ghost"
+                            onClick={() => setSelectedPayoutId(p.id)}
                           >
-                            {markingPaidId === p.id ? '…' : 'Mark as paid'}
+                            View details
                           </Button>
-                        )}
+                          {p.status === 'pending' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={markingPaidId === p.id}
+                              onClick={() => markPayoutPaid(p.id)}
+                            >
+                              {markingPaidId === p.id ? '…' : 'Mark as paid'}
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
