@@ -637,6 +637,139 @@ export function FinanceDashboard() {
         </CardContent>
       </Card>
 
+      {/* Payout details dialog */}
+      <Dialog open={!!selectedPayoutId} onOpenChange={(open) => !open && setSelectedPayoutId(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Payout details</DialogTitle>
+          </DialogHeader>
+          {loadingPayoutDetails && !payoutDetails ? (
+            <div className="py-8 text-center text-muted-foreground">Loading…</div>
+          ) : payoutDetails ? (
+            <div className="space-y-6">
+              {/* Recipient */}
+              <div>
+                <h4 className="text-sm font-medium mb-2">Recipient</h4>
+                <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                  {payoutDetails.payout.recipient_type === 'platform' && <span>Platform</span>}
+                  {payoutDetails.payout.recipient_type === 'laundry' && payoutDetails.recipient && 'business_name' in payoutDetails.recipient && (
+                    <>
+                      <div className="font-medium">{payoutDetails.recipient.business_name}</div>
+                      {payoutDetails.recipient.physical_address && <div className="text-muted-foreground">{payoutDetails.recipient.physical_address}</div>}
+                      {payoutDetails.recipient.phone && <div className="text-muted-foreground">{payoutDetails.recipient.phone}</div>}
+                    </>
+                  )}
+                  {payoutDetails.payout.recipient_type === 'driver' && payoutDetails.recipient && 'full_name' in payoutDetails.recipient && (
+                    <>
+                      <div className="font-medium">{payoutDetails.recipient.full_name}</div>
+                      {payoutDetails.recipient.email && <div className="text-muted-foreground">{payoutDetails.recipient.email}</div>}
+                      {payoutDetails.recipient.phone && <div className="text-muted-foreground">{payoutDetails.recipient.phone}</div>}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Banking */}
+              <div>
+                <h4 className="text-sm font-medium mb-2">Banking</h4>
+                <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                  {(() => {
+                    const bank = (payoutDetails.payout.bank_account_details as Record<string, unknown> | null) ?? (payoutDetails.recipient && 'bank_details' in payoutDetails.recipient ? (payoutDetails.recipient.bank_details as Record<string, unknown> | null) : null)
+                    if (!bank || typeof bank !== 'object') return <span className="text-muted-foreground">No banking details on file.</span>
+                    const holder = bank.account_holder ?? bank.account_holder_name
+                    const name = bank.bank_name ?? bank.bank
+                    const num = bank.account_number ?? bank.account_no
+                    if (!holder && !name && !num) return <span className="text-muted-foreground">No banking details on file.</span>
+                    return (
+                      <>
+                        {holder && <div><span className="text-muted-foreground">Account holder: </span>{String(holder)}</div>}
+                        {name && <div><span className="text-muted-foreground">Bank: </span>{String(name)}</div>}
+                        {num && <div><span className="text-muted-foreground">Account number: </span>{String(num)}</div>}
+                      </>
+                    )
+                  })()}
+                </div>
+              </div>
+
+              {/* Payout summary */}
+              <div>
+                <h4 className="text-sm font-medium mb-2">Payout summary</h4>
+                <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+                  <div>
+                    <span className="text-muted-foreground">Period: </span>
+                    {payoutDetails.payout.period_start && payoutDetails.payout.period_end
+                      ? `${payoutDetails.payout.period_start} – ${payoutDetails.payout.period_end}`
+                      : '—'}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Status: </span>
+                    <Badge variant={payoutDetails.payout.status === 'completed' ? 'default' : 'secondary'}>{payoutDetails.payout.status}</Badge>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Total: </span>
+                    <span className="font-semibold">R{Number(payoutDetails.payout.amount ?? 0).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Earnings in this payout */}
+              <div>
+                <h4 className="text-sm font-medium mb-2">Earnings in this payout</h4>
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Order ID</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Date</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {payoutDetails.earnings.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="h-16 text-center text-muted-foreground">No earnings (payout total may still apply).</TableCell>
+                        </TableRow>
+                      ) : (
+                        payoutDetails.earnings.map((e) => (
+                          <TableRow key={e.id}>
+                            <TableCell className="font-mono text-xs">{String(e.order_id).slice(0, 8)}…</TableCell>
+                            <TableCell className="text-sm">{e.description ?? '—'}</TableCell>
+                            <TableCell>R{Number(e.amount ?? 0).toFixed(2)}</TableCell>
+                            <TableCell className="text-muted-foreground text-sm">{e.created_at ? new Date(e.created_at).toLocaleDateString() : '—'}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                      {payoutDetails.earnings.length > 0 && (
+                        <TableRow className="font-medium">
+                          <TableCell colSpan={2}>Total</TableCell>
+                          <TableCell>R{payoutDetails.earnings.reduce((sum, e) => sum + Number(e.amount ?? 0), 0).toFixed(2)}</TableCell>
+                          <TableCell />
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {/* Orders (distinct) */}
+              {payoutDetails.earnings.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Orders</h4>
+                  <p className="text-sm text-muted-foreground">
+                    {[...new Set(payoutDetails.earnings.map((e) => e.order_id))].length} order(s):{' '}
+                    {[...new Set(payoutDetails.earnings.map((e) => e.order_id))].slice(0, 5).map((id) => String(id).slice(0, 8) + '…').join(', ')}
+                    {[...new Set(payoutDetails.earnings.map((e) => e.order_id))].length > 5 && ' …'}
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="py-8 text-center text-muted-foreground">Could not load payout details.</div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Earnings (from earnings table) */}
       <Card>
         <CardHeader>

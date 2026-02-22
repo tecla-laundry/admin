@@ -1,0 +1,57 @@
+[
+  {
+    "name": "Randburg",
+    "center": { "lat": -26.0965, "lng": 28.0132 },
+    "radius": 10
+  },
+  {
+    "name": "Bryanston",
+    "center": { "lat": -26.0519, "lng": 28.0236 },
+    "radius": 8
+  },
+  {
+    "name": "Sandton",
+    "center": { "lat": -26.1075, "lng": 28.0567 },
+    "radius": 10
+  },
+  {
+    "name": "Fourways",
+    "center": { "lat": -26.0183, "lng": 28.0067 },
+    "radius": 9
+  },
+  {
+    "name": "Sunninghill",
+    "center": { "lat": -26.0431, "lng": 28.0864 },
+    "radius": 7
+  },
+  {
+    "name": "Rivonia",
+    "center": { "lat": -26.0603, "lng": 28.0611 },
+    "radius": 6
+  },
+  {
+    "name": "Woodmead",
+    "center": { "lat": -26.0667, "lng": 28.1069 },
+    "radius": 7
+  },
+  {
+    "name": "Rosebank",
+    "center": { "lat": -26.1453, "lng": 28.0411 },
+    "radius": 5
+  },
+  {
+    "name": "Hyde Park / Melrose",
+    "center": { "lat": -26.1308, "lng": 28.0369 },
+    "radius": 5
+  },
+  {
+    "name": "Northriding / Northgate",
+    "center": { "lat": -26.0667, "lng": 28.0 },
+    "radius": 8
+  },
+  {
+    "name": "Midrand (partial)",
+    "center": { "lat": -25.9636, "lng": 28.1369 },
+    "radius": 12
+  }
+]
