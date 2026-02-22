@@ -284,8 +284,13 @@ export function OrderDetailDrawer({
     'driver_delivery_assigned',
     'delivery_in_progress',
   ]
-  const redispatchTaskType =
-    pickupStatuses.includes(order?.status) ? 'pickup' : deliveryStatuses.includes(order?.status) ? 'delivery' : null
+  const redispatchTaskType = order
+    ? pickupStatuses.includes(order.status)
+      ? 'pickup'
+      : deliveryStatuses.includes(order.status)
+        ? 'delivery'
+        : null
+    : null
 
   const handleRedispatchDriver = async () => {
     if (!order || redispatchTaskType === null) {
