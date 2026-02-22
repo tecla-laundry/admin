@@ -41,16 +41,26 @@ async function upsertPlatformSetting(
   if (error) throw error
 }
 
-async function fetchCommissionOverrides(
+async function fetchUnpaidEarningsSummary(
   supabase: ReturnType<typeof import('@/lib/supabase/client').createClient>
-): Promise<Array<{ id: string; business_name: string; commission_rate: number | null }>> {
+): Promise<{ pendingLaundry: number; pendingDrivers: number; pendingPlatform: number; totalUnpaid: number }> {
   const { data, error } = await supabase
-    .from('laundries')
-    .select('id,business_name,commission_rate')
-    .order('business_name', { ascending: true })
-
+    .from('earnings')
+    .select('recipient_type,amount')
+    .eq('paid', false)
   if (error) throw error
-  return (data || []) as any
+  let pendingLaundry = 0
+  let pendingDrivers = 0
+  let pendingPlatform = 0
+  for (const row of data || []) {
+    const amt = Number((row as any).amount || 0)
+    const type = (row as any).recipient_type
+    if (type === 'laundry') pendingLaundry += amt
+    if (type === 'driver') pendingDrivers += amt
+    if (type === 'platform') pendingPlatform += amt
+  }
+  const totalUnpaid = pendingLaundry + pendingDrivers + pendingPlatform
+  return { pendingLaundry, pendingDrivers, pendingPlatform, totalUnpaid }
 }
 
 async function fetchPayoutsAndEscrow(
@@ -161,18 +171,9 @@ export function FinanceDashboard() {
   const [platformFee, setPlatformFee] = useState('15')
   const [savingCommission, setSavingCommission] = useState(false)
 
-  const [overrideError, setOverrideError] = useState<string | null>(null)
-  const { data: overrides, refetch: refetchOverrides } = useQuery({
-    queryKey: ['finance', 'commission-overrides'],
-    queryFn: async () => {
-      try {
-        setOverrideError(null)
-        return await fetchCommissionOverrides(supabase)
-      } catch (e: any) {
-        setOverrideError(e?.message || 'Unable to load overrides')
-        return []
-      }
-    },
+  const { data: unpaidSummary, isLoading: loadingUnpaidSummary, refetch: refetchUnpaidSummary } = useQuery({
+    queryKey: ['finance', 'unpaid-earnings-summary'],
+    queryFn: () => fetchUnpaidEarningsSummary(supabase),
   })
 
   // Payout controls
@@ -290,30 +291,6 @@ export function FinanceDashboard() {
     }
   }
 
-  const saveOverride = async (laundryId: string, value: string) => {
-    const r = value === '' ? null : Number(value)
-    if (r !== null && (Number.isNaN(r) || r < 0 || r > 1)) {
-      toast.error('Override rate must be between 0 and 1 (e.g. 0.12)')
-      return
-    }
-    try {
-      const { error } = await supabase.from('laundries').update({ commission_rate: r }).eq('id', laundryId)
-      if (error) throw error
-
-      await logAdminAudit(supabase, {
-        action: 'update_settings',
-        targetType: 'settings',
-        targetId: laundryId,
-        details: { commission_rate_override: r },
-      })
-
-      toast.success('Override saved')
-      refetchOverrides()
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to save override')
-    }
-  }
-
   const processWeeklyPayouts = async () => {
     if (!periodStart || !periodEnd) {
       toast.error('Select period start and end dates')
@@ -337,6 +314,7 @@ export function FinanceDashboard() {
       refetchPayoutSummary()
       refetchPayoutsList()
       refetchEarnings()
+      refetchUnpaidSummary()
     } catch (e: any) {
       toast.error(e?.message || 'Failed to process payouts')
     } finally {
@@ -353,6 +331,7 @@ export function FinanceDashboard() {
       refetchPayoutSummary()
       refetchPayoutsList()
       refetchEarnings()
+      refetchUnpaidSummary()
     } catch (e: any) {
       toast.error(e?.message || 'Failed to mark payout as paid')
     } finally {
@@ -403,40 +382,31 @@ export function FinanceDashboard() {
 
             <div className="pt-2 border-t">
               <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">Per-laundry overrides</div>
-                <Button variant="outline" size="sm" onClick={() => refetchOverrides()}>
-                  Refresh
+                <div className="text-sm font-medium">Pending earnings (unpaid)</div>
+                <Button variant="outline" size="sm" onClick={() => refetchUnpaidSummary()} disabled={loadingUnpaidSummary}>
+                  {loadingUnpaidSummary ? 'Loading…' : 'Refresh'}
                 </Button>
               </div>
-              {overrideError ? (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Overrides unavailable: {overrideError}
-                  <br />
-                  Expected column: <code className="font-mono">laundries.commission_rate</code>.
-                </p>
+              {loadingUnpaidSummary ? (
+                <p className="text-sm text-muted-foreground mt-2">Loading…</p>
               ) : (
-                <div className="mt-3 space-y-3 max-h-64 overflow-auto pr-1">
-                  {(overrides || []).map((l) => (
-                    <div key={l.id} className="flex items-center gap-3">
-                      <div className="flex-1">
-                        <div className="text-sm font-medium">{l.business_name}</div>
-                        <div className="text-xs text-muted-foreground">ID: {l.id.slice(0, 8)}…</div>
-                      </div>
-                      <Input
-                        className="w-[140px]"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="1"
-                        defaultValue={l.commission_rate ?? ''}
-                        placeholder="e.g. 0.12"
-                        onBlur={(e) => saveOverride(l.id, e.target.value)}
-                      />
-                    </div>
-                  ))}
-                  {(overrides || []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No laundries found.</p>
-                  ) : null}
+                <div className="mt-3 grid gap-3 sm:grid-cols-4">
+                  <div className="rounded-md border p-3">
+                    <div className="text-xs text-muted-foreground">Pending laundries</div>
+                    <div className="text-lg font-semibold">R{(unpaidSummary?.pendingLaundry ?? 0).toFixed(2)}</div>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <div className="text-xs text-muted-foreground">Pending drivers</div>
+                    <div className="text-lg font-semibold">R{(unpaidSummary?.pendingDrivers ?? 0).toFixed(2)}</div>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <div className="text-xs text-muted-foreground">Pending platform</div>
+                    <div className="text-lg font-semibold">R{(unpaidSummary?.pendingPlatform ?? 0).toFixed(2)}</div>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <div className="text-xs text-muted-foreground">Money held (escrow)</div>
+                    <div className="text-lg font-semibold">R{(unpaidSummary?.totalUnpaid ?? 0).toFixed(2)}</div>
+                  </div>
                 </div>
               )}
             </div>
